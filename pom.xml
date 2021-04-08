@@ -21,7 +21,9 @@
         <developerConnection>scm:git:git@github.com:Jahia/permalink-generator.git</developerConnection>
         <url>https://github.com/Jahia/permalink-generator.git</url>
     </scm>
-
+    <properties>
+        <require-capability>osgi.extender;filter:="(osgi.extender=org.jahia.bundles.blueprint.extender.config)"</require-capability>
+    </properties>
     <repositories>
         <repository>
             <id>jahia-public</id>
@@ -36,6 +38,15 @@
             </snapshots>
         </repository>
     </repositories>
+
+    <dependencies>
+        <dependency>
+            <groupId>javax.servlet.jsp</groupId>
+            <artifactId>jsp-api</artifactId>
+            <version>2.0</version>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
 
     <build>
         <plugins>
