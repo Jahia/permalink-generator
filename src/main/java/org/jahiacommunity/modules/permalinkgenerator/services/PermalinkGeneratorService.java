@@ -17,8 +17,8 @@ import org.slf4j.LoggerFactory;
 
 import javax.jcr.PathNotFoundException;
 import javax.jcr.RepositoryException;
-import java.text.Normalizer;
 import java.util.*;
+import com.github.slugify.*;
 
 /**
  * Service allowing to create a VanityUrl on page creation page
@@ -46,7 +46,7 @@ public class PermalinkGeneratorService {
                 logger.debug(e.getMessage());
             }
 
-            if (node != null && !JCRTagUtils.isNodeType(node, "jnt:content,jnt:contentFolder,,jnt:file,jnt:folder,jnt:globalSettings,jnt:module,jnt:nodeType,jnt:topic,jnt:user,jnt:vfsMountPointFactoryPage,jnt:virtualsite,wemnt:optimizationTest,wemnt:personalizedContent")
+            if (node != null && !JCRTagUtils.isNodeType(node, "jnt:content,jnt:contentFolder,jnt:file,jnt:folder,jnt:globalSettings,jnt:module,jnt:nodeType,jnt:topic,jnt:user,jnt:vfsMountPointFactoryPage,jnt:virtualsite,wemnt:optimizationTest,wemnt:personalizedContent")
             ) {
                     JCRSiteNode site = node.getResolveSite();
                 // check default language
@@ -58,7 +58,8 @@ public class PermalinkGeneratorService {
                 if (JCRContentUtils.isADisplayableNode(node, context)) {
                     logger.debug("Try to create a vanity for node " + node.getPath());
                     List<JCRNodeWrapper> parentNodes = JCRTagUtils.getParentsOfType(node, "jmix:navMenuItem");
-                    String url = "/" + slug(node.getDisplayableName());
+                    //String url = "/" + slug(node.getDisplayableName());
+                    String url = "/" + (new Slugify()).slugify(node.getDisplayableName());
                     Iterator<JCRNodeWrapper> parentNodesIterator = parentNodes.iterator();
 
                     logger.debug("Iterate using session locale " + session.getLocale().toString());
@@ -68,7 +69,9 @@ public class PermalinkGeneratorService {
                         // skip the home (the last one)
                         if (parentNodesIterator.hasNext()) {
                             String pageTitle = parentPage.getDisplayableName();
-                            String slugTitle = slug(pageTitle);
+                            //String slugTitle = slug(pageTitle);
+                            String slugTitle = (new Slugify()).slugify(pageTitle);
+
                             url = "/" + slugTitle + url;
                         }
                     }
@@ -97,25 +100,9 @@ public class PermalinkGeneratorService {
                 } else {
                     logger.debug("Could not create a vanity for node " + node.getPath() + " (not a displayableNode)");
                 }
-
-
-
-
             }
         } else {
             logger.debug("Could not create vanity URL; language is null");
         }
-    }
-
-     public static boolean isNullOrEmpty(final Collection<?> c) {
-        return c == null || c.isEmpty();
-    }
-
-
-    private String slug(final String str) {
-        if (str == null) {
-            return "";
-        }
-        return Normalizer.normalize(str, Normalizer.Form.NFD).replaceAll("[^\\p{ASCII}]", "").replaceAll("[^ \\w|.]", "").trim().replaceAll("\\s+", "-").toLowerCase(Locale.ENGLISH);
     }
 }
