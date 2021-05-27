@@ -18,9 +18,9 @@ global PermalinkGeneratorService permalinkGeneratorService
 global JCRSessionWrapper session
 
 
-rule "Create vanity URL on jcr:title set"
- when
-         A property jcr:title has been set on a node
-    then
-        Create a vanity URL for node node and language property.getLanguage()
+rule "Create permanent URL on jcr:title set"
+when
+    A property jcr:title has been set on a node
+then
+    Create permanent URL for node node and language property.getLanguage()
 end

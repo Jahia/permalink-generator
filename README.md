@@ -10,11 +10,11 @@ Please read the dedicated tutorial on https://academy.jahia.com/training-kb/tuto
 The idea of this module is to try to add a vanity every time that property `jcr:title` is set:
 
 ```drools
-rule "Create vanity URL on jcr:title set"
+rule "Create permanent URL on jcr:title set"
  when
          A property jcr:title has been set on a node
     then
-        Create a vanity URL for node node and language property.getLanguage()
+        Create permanent URL for node node and language property.getLanguage()
 end
 ```
 Here is the way it works
