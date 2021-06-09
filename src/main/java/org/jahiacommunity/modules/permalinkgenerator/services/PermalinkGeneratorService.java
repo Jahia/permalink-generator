@@ -37,16 +37,32 @@ public class PermalinkGeneratorService {
     public void addVanity(final AddedNodeFact addedNodeFact, final String language, KnowledgeHelper drools) throws
             Exception {
         if (language != null) {
-            JCRSiteNode site = addedNodeFact.getNode().getResolveSite();
-            // check if module is enabled on that site
-            JCRPropertyWrapper installedModules = site.getProperty("j:installedModules");
             boolean isInstalled = false;
-            for (JCRValueWrapper module : installedModules.getValues()) {
-                if ("permalink-generator".equals(module.getString())) {
-                    isInstalled = true;
-                    break;
+            try {
+                JCRSiteNode site = addedNodeFact.getNode().getResolveSite();
+                if (site != null) {
+                    // check if module is enabled on that site
+                    try {
+                        JCRPropertyWrapper installedModules = site.getProperty("j:installedModules");
+
+                        for (JCRValueWrapper module : installedModules.getValues()) {
+                            if ("permalink-generator".equals(module.getString())) {
+                                isInstalled = true;
+                                break;
+                            }
+                        }
+                    } catch (javax.jcr.PathNotFoundException e) {
+                        if (logger.isDebugEnabled()) {
+                            logger.debug("Could not get node j:installedModules for path " + site.getPath() + " : " + e.getMessage());
+                        }
+                    }
+                }
+            } catch (RepositoryException re) {
+                if (logger.isDebugEnabled()) {
+                    logger.debug("Could not resolve site for node " + addedNodeFact.getPath());
                 }
             }
+
             if (isInstalled) {
                 JCRNodeWrapper node = null;
                 Locale locale = new Locale(language);
@@ -54,7 +70,9 @@ public class PermalinkGeneratorService {
                 try {
                     node = session.getNode(addedNodeFact.getPath());
                 } catch (PathNotFoundException e) {
-                    logger.debug(e.getMessage());
+                    if (logger.isDebugEnabled()) {
+                        logger.debug(e.getMessage());
+                    }
                 }
                 if (node != null && !JCRTagUtils.isNodeType(node, "jnt:content,jnt:contentFolder,jnt:file,jnt:folder,jnt:globalSettings,jnt:module,jnt:nodeType,jnt:topic,jnt:user,jnt:vfsMountPointFactoryPage,jnt:virtualsite,wemnt:optimizationTest,wemnt:personalizedContent")
                 ) {
@@ -68,7 +86,6 @@ public class PermalinkGeneratorService {
                             logger.debug("Try to create a vanity for node " + node.getPath());
                         }
                         List<JCRNodeWrapper> parentNodes = JCRTagUtils.getParentsOfType(node, "jmix:navMenuItem");
-                        //String url = "/" + slug(node.getDisplayableName());
                         String url = "/" + (new Slugify()).slugify(node.getDisplayableName());
                         Iterator<JCRNodeWrapper> parentNodesIterator = parentNodes.iterator();
                         while (parentNodesIterator.hasNext()) {
@@ -76,7 +93,6 @@ public class PermalinkGeneratorService {
                             // skip the home (the last one)
                             if (parentNodesIterator.hasNext()) {
                                 String pageTitle = parentPage.getDisplayableName();
-                                //String slugTitle = slug(pageTitle);
                                 String slugTitle = (new Slugify()).slugify(pageTitle);
                                 url = "/" + slugTitle + url;
                             }
@@ -95,7 +111,9 @@ public class PermalinkGeneratorService {
                                             logger.debug("addVanity " + url + " for page " + node.getPath());
                                         }
                                     } catch (RepositoryException e) {
-                                        logger.debug("could not add vanity " + url + " for page " + node.getPath() + " -> " + e.getMessage());
+                                        if (logger.isDebugEnabled()) {
+                                            logger.debug("could not add vanity " + url + " for page " + node.getPath() + " -> " + e.getMessage());
+                                        }
                                     }
                                 } else {
                                     if (logger.isDebugEnabled())  {
@@ -119,7 +137,9 @@ public class PermalinkGeneratorService {
                 }
             }
         } else {
-            logger.debug("Could not create vanity URL; language is null");
+            if (logger.isDebugEnabled()) {
+                logger.debug("Could not create vanity URL; language is null");
+            }
         }
     }
 }
