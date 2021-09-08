@@ -74,7 +74,7 @@ public class PermalinkGeneratorService {
                             String siteKey = site.getSiteKey();
                             RenderContext context = new org.jahia.services.render.RenderContext(null, null, null);
                             context.setSite(site);
-                            if (JCRContentUtils.isADisplayableNode(node, context)) {
+                            if (JCRContentUtils.isADisplayableNode(node, new RenderContext(null, null, node.getSession().getUser()))) {
                                 if (logger.isDebugEnabled()) {
                                     logger.debug("Try to create a vanity for node " + node.getPath());
                                 }
