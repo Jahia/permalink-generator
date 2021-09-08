@@ -67,7 +67,7 @@ public class PermalinkGeneratorService {
                                 logger.debug(e.getMessage());
                             }
                         }
-                        if (node != null && !JCRTagUtils.isNodeType(node, "jnt:content,jnt:contentFolder,jnt:file,jnt:folder,jnt:globalSettings,jnt:module,jnt:nodeType,jnt:topic,jnt:user,jnt:vfsMountPointFactoryPage,jnt:virtualsite,wemnt:optimizationTest,wemnt:personalizedContent")
+                        if (node != null && !JCRTagUtils.isNodeType(node, "jnt:contentFolder,jnt:file,jnt:folder,jnt:globalSettings,jnt:module,jnt:nodeType,jnt:topic,jnt:user,jnt:vfsMountPointFactoryPage,jnt:virtualsite,wemnt:optimizationTest,wemnt:personalizedContent")
                         ) {
                             // check default language
                             String defaultLanguage = site.getDefaultLanguage();
