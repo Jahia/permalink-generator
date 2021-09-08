@@ -18,6 +18,7 @@ import org.slf4j.LoggerFactory;
 import javax.jcr.PathNotFoundException;
 import javax.jcr.RepositoryException;
 import java.util.*;
+
 import com.github.slugify.*;
 
 /**
@@ -30,8 +31,8 @@ public class PermalinkGeneratorService {
      * Will create a SEO for the giving path
      *
      * @param addedNodeFact the AddedNodeFact which called the rule
-     * @param language  the language of the node
-     * @param drools drools helper
+     * @param language      the language of the node
+     * @param drools        drools helper
      * @throws Exception
      */
     public void addVanity(final AddedNodeFact addedNodeFact, final String language, KnowledgeHelper drools) throws
@@ -39,6 +40,7 @@ public class PermalinkGeneratorService {
         if (language != null) {
             try {
                 JCRSiteNode site = addedNodeFact.getNode().getResolveSite();
+
                 if (site != null) {
                     // check if module is enabled on that site
                     boolean isInstalled = false;
@@ -59,7 +61,8 @@ public class PermalinkGeneratorService {
                     if (isInstalled) {
                         JCRNodeWrapper node = null;
                         Locale locale = new Locale(language);
-                        JCRSessionWrapper session = JCRSessionFactory.getInstance().getCurrentSystemSession(Constants.EDIT_WORKSPACE,locale,null);
+
+                        JCRSessionWrapper session = JCRSessionFactory.getInstance().getCurrentSystemSession(Constants.EDIT_WORKSPACE, locale, null);
                         try {
                             node = session.getNode(addedNodeFact.getPath());
                         } catch (PathNotFoundException e) {
@@ -74,49 +77,50 @@ public class PermalinkGeneratorService {
                             String defaultLanguage = site.getDefaultLanguage();
                             String siteKey = site.getSiteKey();
                             context.setSite(site);
-
-                                if (logger.isDebugEnabled()) {
-                                    logger.debug("Try to create a vanity for node " + node.getPath());
+                            if (logger.isDebugEnabled()) {
+                                logger.debug("Try to create a vanity for node " + node.getPath());
+                            }
+                            JCRTagUtils.getParentOfType(node, "jmix:navMenuItem");
+                            List<JCRNodeWrapper> parentNodes = JCRTagUtils.getParentsOfType(node, "jmix:navMenuItem");
+                            String url = "/" + (new Slugify()).slugify(node.getDisplayableName());
+                            Iterator<JCRNodeWrapper> parentNodesIterator = parentNodes.iterator();
+                            while (parentNodesIterator.hasNext()) {
+                                JCRNodeWrapper parentPage = parentNodesIterator.next();
+                                // skip the home (the last one)
+                                // if (parentNodesIterator.hasNext()) {
+                                if (! parentPage.hasProperty("j:isHomePage")) {
+                                    String pageTitle = parentPage.getDisplayableName();
+                                    String slugTitle = (new Slugify()).slugify(pageTitle);
+                                    url = "/" + slugTitle + url;
                                 }
-                                List<JCRNodeWrapper> parentNodes = JCRTagUtils.getParentsOfType(node, "jmix:navMenuItem");
-                                String url = "/" + (new Slugify()).slugify(node.getDisplayableName());
-                                Iterator<JCRNodeWrapper> parentNodesIterator = parentNodes.iterator();
-                                while (parentNodesIterator.hasNext()) {
-                                    JCRNodeWrapper parentPage = parentNodesIterator.next();
-                                    // skip the home (the last one)
-                                    if (parentNodesIterator.hasNext()) {
-                                        String pageTitle = parentPage.getDisplayableName();
-                                        String slugTitle = (new Slugify()).slugify(pageTitle);
-                                        url = "/" + slugTitle + url;
-                                    }
-                                }
-                                if (! language.equals(defaultLanguage)) {
-                                    url = "/" + language + url;
-                                }
-                                if (!url.startsWith("/null")) {
-                                    try {
-                                        VanityUrlManager urlMgr = SpringContextSingleton.getInstance().getContext().getBean(VanityUrlManager.class);
-                                        if (urlMgr.findExistingVanityUrls(url, siteKey, session) == null || urlMgr.findExistingVanityUrls(url, siteKey, session).isEmpty()) {
-                                            try {
-                                                VanityUrl vanityUrl = new VanityUrl(url, siteKey, language, true, true);
-                                                urlMgr.saveVanityUrlMapping(node, vanityUrl, session);
-                                                if (logger.isDebugEnabled())  {
-                                                    logger.debug("addVanity " + url + " for page " + node.getPath());
-                                                }
-                                            } catch (RepositoryException e) {
-                                                if (logger.isDebugEnabled()) {
-                                                    logger.debug("could not add vanity " + url + " for page " + node.getPath() + " -> " + e.getMessage());
-                                                }
+                            }
+                            if (!language.equals(defaultLanguage)) {
+                                url = "/" + language + url;
+                            }
+                            if (!url.startsWith("/null")) {
+                                try {
+                                    VanityUrlManager urlMgr = SpringContextSingleton.getInstance().getContext().getBean(VanityUrlManager.class);
+                                    if (urlMgr.findExistingVanityUrls(url, siteKey, session) == null || urlMgr.findExistingVanityUrls(url, siteKey, session).isEmpty()) {
+                                        try {
+                                            VanityUrl vanityUrl = new VanityUrl(url, siteKey, language, true, true);
+                                            urlMgr.saveVanityUrlMapping(node, vanityUrl, session);
+                                            if (logger.isDebugEnabled()) {
+                                                logger.debug("addVanity " + url + " for page " + node.getPath());
                                             }
-                                        } else {
-                                            if (logger.isDebugEnabled())  {
-                                                logger.debug("could not add vanity " + url + " for page " + node.getPath() + " -> already exist");
+                                        } catch (RepositoryException e) {
+                                            if (logger.isDebugEnabled()) {
+                                                logger.debug("could not add vanity " + url + " for page " + node.getPath() + " -> " + e.getMessage());
                                             }
                                         }
-                                    } catch (NonUniqueUrlMappingException nonUniqueUrlMappingException) {
-                                        logger.error(nonUniqueUrlMappingException.getMessage(), nonUniqueUrlMappingException);
+                                    } else {
+                                        if (logger.isDebugEnabled()) {
+                                            logger.debug("could not add vanity " + url + " for page " + node.getPath() + " -> already exist");
+                                        }
                                     }
+                                } catch (NonUniqueUrlMappingException nonUniqueUrlMappingException) {
+                                    logger.error(nonUniqueUrlMappingException.getMessage(), nonUniqueUrlMappingException);
                                 }
+                            }
 
                         } else {
                             if (logger.isDebugEnabled()) {
