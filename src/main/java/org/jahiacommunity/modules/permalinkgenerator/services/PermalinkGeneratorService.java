@@ -67,14 +67,14 @@ public class PermalinkGeneratorService {
                                 logger.debug(e.getMessage());
                             }
                         }
-                        if (node != null && !JCRTagUtils.isNodeType(node, "jnt:contentFolder,jnt:file,jnt:folder,jnt:globalSettings,jnt:module,jnt:nodeType,jnt:topic,jnt:user,jnt:vfsMountPointFactoryPage,jnt:virtualsite,wemnt:optimizationTest,wemnt:personalizedContent")
+                        RenderContext context = new org.jahia.services.render.RenderContext(null, null, node.getSession().getUser());
+                        if (node != null && JCRContentUtils.isADisplayableNode(node, context)
                         ) {
                             // check default language
                             String defaultLanguage = site.getDefaultLanguage();
                             String siteKey = site.getSiteKey();
-                            RenderContext context = new org.jahia.services.render.RenderContext(null, null, null);
                             context.setSite(site);
-                            if (JCRContentUtils.isADisplayableNode(node, new RenderContext(null, null, node.getSession().getUser()))) {
+
                                 if (logger.isDebugEnabled()) {
                                     logger.debug("Try to create a vanity for node " + node.getPath());
                                 }
@@ -118,10 +118,9 @@ public class PermalinkGeneratorService {
                                     }
                                 }
 
-                            } else {
-                                if (logger.isDebugEnabled()) {
-                                    logger.debug("Could not create a vanity for node " + node.getPath() + " (not a displayableNode)");
-                                }
+                        } else {
+                            if (logger.isDebugEnabled()) {
+                                logger.debug("Could not create a vanity for node " + node.getPath() + " (not a displayableNode)");
                             }
                         }
                     } else {
