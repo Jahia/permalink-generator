@@ -13,6 +13,7 @@ The idea of this module is to try to add a vanity every time that property `jcr:
 rule "Create permanent URL on jcr:title set"
  when
          A property jcr:title has been set on a node
+         - not in operation import
     then
         Create permanent URL for node node and language property.getLanguage()
 end
