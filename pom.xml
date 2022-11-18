@@ -9,14 +9,14 @@
     <groupId>org.jahiacommunity.modules</groupId>
     <artifactId>permalink-generator</artifactId>
     <name>Permalink Generator</name>
-    <version>1.0.4-SNAPSHOT</version>
+    <version>1.0.4</version>
     <packaging>bundle</packaging>
     <description>Permalink Generator will generate permalink for your displayable contents</description>
     <scm>
         <connection>scm:git:git@github.com:Jahia/permalink-generator.git</connection>
         <developerConnection>scm:git:git@github.com:Jahia/permalink-generator.git</developerConnection>
         <url>https://github.com/Jahia/permalink-generator.git</url>
-      <tag>HEAD</tag>
+      <tag>permalink-generator-1.0.4</tag>
   </scm>
     <properties>
         <require-capability>osgi.extender;filter:="(osgi.extender=org.jahia.bundles.blueprint.extender.config)"</require-capability>
