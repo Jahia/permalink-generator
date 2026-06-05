@@ -1,2 +1,20 @@
-<jnt = 'http://www.jahia.org/jahia/nt/1.0'>
+ <jnt = 'http://www.jahia.org/jahia/nt/1.0'>
 <jmix = 'http://www.jahia.org/jahia/mix/1.0'>
+
+[jmix:permalinkGenerated] mixin
+ - j:permalinkGenerated (boolean) = 'true' autocreated hidden nofulltext
+
+// Site-level settings — visible in Content Editor site options
+[jmix:permalinkGeneratorSettings] mixin
+ extends = jnt:virtualsite
+ itemtype = options
+ - j:permalinkGeneratorMode (string) = 'SMART' nofulltext
+   < 'SMART', 'FORCE'
+
+// Applied to a page: the module will never create or update vanities on this node or its descendants
+[jmix:permalinkExcluded] mixin
+ extends = jmix:navMenuItem
+ itemtype = options
+
+// Content node used to render the site settings admin page
+[jnt:permalinkGeneratorSiteSettings] > jnt:content, mix:title, jmix:studioOnly, jmix:siteComponent

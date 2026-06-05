@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <content xmlns:j="http://www.jahia.org/jahia/1.0" xmlns:jcr="http://www.jcp.org/jcr/1.0">
    <modules jcr:primaryType="jnt:modules">
-      <permalink-generator j:dependencies="default"
+      <permalink-generator j:dependencies="default, seo"
                            j:modulePriority="0"
                            j:moduleType="module"
-                           j:title="permalink-generator"
+                           j:title="Permalink Generator"
+                           jcr:mixinTypes="jmix:hasExternalProviderExtension"
                            jcr:primaryType="jnt:module">
          <portlets jcr:primaryType="jnt:portletFolder"/>
          <files jcr:primaryType="jnt:folder"/>
@@ -12,6 +13,28 @@
          <templates j:rootTemplatePath="/base" jcr:primaryType="jnt:templatesFolder">
             <files jcr:primaryType="jnt:folder"/>
             <contents jcr:primaryType="jnt:contentFolder"/>
+            <site-settings-base j:view="siteSettings"
+                                jcr:mixinTypes="jmix:useUILocale"
+                                jcr:primaryType="jnt:template">
+               <permalinkGeneratorSettings
+                       j:applyOn="jnt:virtualsite"
+                       j:defaultTemplate="false"
+                       j:hiddenTemplate="true"
+                       j:priority="100"
+                       j:requiredPermissionNames="siteAdminPermalinkGenerator"
+                       j:titleKey="permalinkgenerator.siteSettings.title"
+                       jcr:mixinTypes="jmix:rbTitle"
+                       jcr:primaryType="jnt:contentTemplate">
+                  <pagecontent jcr:primaryType="jnt:contentList">
+                     <permalinkGeneratorSiteSettings jcr:primaryType="jnt:permalinkGeneratorSiteSettings">
+                        <j:translation_en jcr:language="en"
+                                          jcr:mixinTypes="mix:title"
+                                          jcr:primaryType="jnt:translation"
+                                          jcr:title="Permalink Generator"/>
+                     </permalinkGeneratorSiteSettings>
+                  </pagecontent>
+               </permalinkGeneratorSettings>
+            </site-settings-base>
          </templates>
       </permalink-generator>
    </modules>

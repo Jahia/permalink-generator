@@ -1,0 +1,8 @@
+{
+  "name": "jmix:permalinkGeneratorSettings",
+  "fields": [
+    {
+      "name": "j:permalinkGeneratorMode"
+    }
+  ]
+}

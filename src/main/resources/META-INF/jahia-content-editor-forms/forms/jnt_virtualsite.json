@@ -1,0 +1,14 @@
+{
+  "nodeType": "jnt:virtualsite",
+  "sections": [
+    {
+      "name": "options",
+      "fieldSets": [
+        {
+          "name": "jmix:permalinkGeneratorSettings",
+          "hide": true
+        }
+      ]
+    }
+  ]
+}

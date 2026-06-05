@@ -1,0 +1,19 @@
+{
+  "permalinkgenerator": {
+    "siteSettings": {
+      "title": "Permalink Generator"
+    }
+  },
+  "jmix_permalinkGeneratorSettings": {
+    "label": "Permalink Generator",
+    "j:permalinkGeneratorMode": {
+      "label": "Vanity URL mode",
+      "SMART": "Smart — respect manual vanities",
+      "FORCE": "Force — always apply module rules",
+      "DISABLED": "Disabled — do not create vanities"
+    }
+  },
+  "jmix_permalinkExcluded": {
+    "label": "Exclude from automatic vanity URL generation"
+  }
+}

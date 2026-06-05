@@ -1,47 +1,58 @@
 # permalink-generator
-> Permalink Generator will generate permalink for your displayable contents
+> Automatically generates and maintains permanent vanity URLs for displayable content in Jahia.
 
 ## Installation
 
-Please read the dedicated tutorial on https://academy.jahia.com/training-kb/tutorials/administrators/installing-a-module and select the Permalink Generator module from the store.
+Install from the Jahia store or follow the [module installation guide](https://academy.jahia.com/training-kb/tutorials/administrators/installing-a-module).
 
-## Usage
+## How it works
 
-The idea of this module is to try to add a vanity every time that property `jcr:title` is set:
+The module listens to JCR events and manages vanity URLs automatically. All module-generated vanities are tagged with the `jmix:permalinkGenerated` mixin, distinguishing them from manually-created vanities (which are never touched).
 
-```drools
-rule "Create permanent URL on jcr:title set"
- when
-         A property jcr:title has been set on a node
-         - not in operation import
-    then
-        Create permanent URL for node node and language property.getLanguage()
-end
-```
-Here is the way it works
+### URL construction
 
-1. It check if the module is enabled for your site
-2. It check if the related node is a displayable node  (for node type with a dedicated content template, or for pages)
-3. It check if current language is the default one. If not, then prefix the vanity with the language (for instance `/fr` for french)
-4. Get all parent nodes of type `jmix:navMenuItem` (could be a page or a menu label), and get the title of this parent node.
-5. It generates a SEO-friendly URLs using parent titles
-6. It adds a new default vanity URL on the node
+1. Check the module is enabled on the site
+2. Skip home pages and non-displayable nodes
+3. If the direct parent has an active default vanity → use it as base path + slugified title of current node
+4. If the parent has no vanity → rebuild full path by slugifying each ancestor's title
+5. Prepend language code if not the default language (e.g. `/fr/...`)
+6. On URL conflict → append `-2`, `-3`, … up to 10 attempts
 
+### Example
 
-This module uses the Slugigy https://github.com/slugify/slugify library to create a SEO friendly name.
+Site structure: `Home` / `Section` / `Sub-page`
 
-### Example of generated URL
+- `Section` vanity: `/section`
+- `Sub-page` vanity: `/section/sub-page`
+- French (non-default): `/fr/section/sub-page`
 
-Here is an example of page path:
+### Vanity lifecycle
 
-`Home` / `Page 1` / `Page 2` / `Page 3`
+| Event | Unpublished module-managed vanity | Published module-managed vanity | Manual vanity |
+|---|---|---|---|
+| **Title change** | Deleted, new one created | Kept as active redirect (`j:default=false`), new one created | Untouched |
+| **Page move** | Deleted, new one created (slug preserved, prefix updated) | Kept as active redirect, new one created | Untouched |
+| **Page copy** | Stripped from the copy | Stripped from the copy | Untouched |
+| **Page delete** | Deleted | Deactivated (`j:active=false`) | Untouched |
 
-When editing the page 3 title, the module will generate such a URL
+Published vanities are never deleted — they stay active as redirects so old URLs never 404.
 
-`/page-1/page-2/page-3` or `/fr/page-1/page-2/page-3` if `fr` is not the default language. 
+### Propagation on rename
 
+When a page title changes, all descendant nav-menu pages have their vanities recomputed automatically. Processing is depth-first: each child sees its parent's updated vanity before computing its own.
 
+### Propagation on move
 
-## Limitation
+On move, the slug of each page is preserved — only the prefix changes. Descendants are updated recursively in the same depth-first order.
 
-As the permanent link is based on the parent pages name, if you rename the title of a parent page, then the existing vanity for all the sub-nodes won't be updated.
+## Dependencies
+
+- Jahia 8.x
+- [slugify](https://github.com/slugify/slugify) 2.4
+- Jahia `seo` module
+
+## Technical notes
+
+- `PermalinkGeneratorService` is a Spring bean with `@Autowired VanityUrlManager`, registered as a Drools global via `ModuleGlobalObject`
+- `jmix:permalinkGenerated` mixin defined in `META-INF/definitions.cnd`
+- Rules in `META-INF/rules.drl` / `META-INF/rules.dsl`

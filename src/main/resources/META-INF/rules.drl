@@ -1,6 +1,5 @@
 package org.jahiacommunity.modules.permalinkgenerator.rules
 
-// list any import classes here.
 import org.jahia.services.content.rules.*
 import org.jahia.services.content.JCRContentUtils
 import org.jahia.services.content.JCRSessionWrapper
@@ -9,7 +8,6 @@ import org.slf4j.Logger
 
 expander rules.dsl
 
-// declare any global variables here
 global User user
 global Service service
 global Logger logger
@@ -18,10 +16,44 @@ global PermalinkGeneratorService permalinkGeneratorService
 global JCRSessionWrapper session
 
 
-rule "Create permanent URL on jcr:title set"
+rule "Create or update permanent URL on jcr:title set"
 when
     A property jcr:title has been set on a node
-           - not in operation import
+    - not in operation import
+    - not in operation copy
 then
     Create permanent URL for node node and language property.getLanguage()
+end
+
+rule "Recreate permanent URLs on node move"
+when
+    A node is moved
+    - not in operation import
+then
+    Recreate permanent URLs for moved node node
+end
+
+rule "Clean permanent URLs on node deletion"
+when
+    A node is deleted
+    - not in operation import
+then
+    Clean permanent URLs for deleted node node
+end
+
+rule "Strip inherited module-managed vanities on page copy"
+when
+    A node is a top copy
+then
+    Strip copied vanities for node node
+end
+
+rule "Mark vanity as manual when editor changes its URL"
+when
+    A property j:url has been set on a node
+    - the node has type jmix:permalinkGenerated
+    - not in operation import
+    - not in operation copy
+then
+    Remove permalink generated mixin from node node
 end
