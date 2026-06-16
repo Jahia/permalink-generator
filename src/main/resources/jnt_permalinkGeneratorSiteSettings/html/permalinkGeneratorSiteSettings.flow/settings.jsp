@@ -27,14 +27,14 @@
 
 <style>
     .permalink-mode-panel {
-        border-left: 4px solid #3c8cba;
+        border: 1px solid #c8dcea;
         background: #f5f9fd;
-        border-radius: 0 4px 4px 0;
+        border-radius: 4px;
         padding: 14px 18px;
         margin-top: 12px;
     }
-    .permalink-mode-panel.force  { border-color: #e67e22; background: #fdf6ee; }
-    .permalink-mode-panel.disabled { border-color: #aaa; background: #f5f5f5; }
+    .permalink-mode-panel.force  { border-color: #f0c890; background: #fdf6ee; }
+    .permalink-mode-panel.disabled { border-color: #ddd; background: #f5f5f5; }
     .permalink-mode-panel h4 { margin: 0 0 6px 0; font-size: 14px; }
     .permalink-mode-panel p  { margin: 0; font-size: 13px; color: #555; }
 </style>
@@ -155,18 +155,39 @@
 .pl-pill-sel  { background: #fff3cd; color: #856404; cursor: pointer; outline: 2px solid #ffc107; }
 .pl-pill-gen  { background: #d4edda; color: #155724; cursor: default; }
 .pl-pill-spin { background: #cce5ff; color: #004085; cursor: default; }
-.pl-progress-wrap { background: #e9ecef; border-radius: 3px; height: 5px; margin-bottom: 10px; }
-.pl-progress-bar  { height: 5px; background: #3c8cba; border-radius: 3px;
-                    width: 0%; transition: width 0.25s ease; }
+.pl-progress-wrap { background: #e9ecef; border-radius: 3px; height: 8px; margin-bottom: 10px; overflow: hidden; }
+.pl-progress-bar  { height: 8px; background: #3c8cba; border-radius: 3px;
+                    width: 100%; transform: scaleX(0); transform-origin: left;
+                    transition: transform 0.25s ease-out; will-change: transform; }
+@media (prefers-reduced-motion: reduce) { .pl-progress-bar { transition: none; } }
 </style>
 
-<%-- Expose site languages and excluded paths to JS before the IIFE --%>
+<%-- Expose site languages, excluded paths, and i18n strings to JS before the IIFE --%>
 <script>
 var _plSiteLangs = [];
 <c:forEach items="${site.languages}" var="_l">_plSiteLangs.push('${_l}');</c:forEach>
 _plSiteLangs.sort();
 var _plExcludedPaths = [];
 <c:if test="${site.hasProperty('j:excludedPaths')}"><c:forEach items="${site.getProperty('j:excludedPaths').values}" var="_ep">_plExcludedPaths.push('${fn:escapeXml(_ep.string)}');</c:forEach></c:if>
+
+var _plI18n = {
+    pathRequired:  '<fmt:message key="permalinkgenerator.audit.pathRequired"/>',
+    scanRunning:   '<fmt:message key="permalinkgenerator.audit.scanRunning"/>',
+    errorGraphql:  '<fmt:message key="permalinkgenerator.audit.error.graphql"/>',
+    errorNetwork:  '<fmt:message key="permalinkgenerator.audit.error.network"/>',
+    scanned:       '<fmt:message key="permalinkgenerator.audit.scanned"/>',
+    allGood:       '<fmt:message key="permalinkgenerator.audit.allGood"/>',
+    loadMoreSt:    '<fmt:message key="permalinkgenerator.audit.loadmore.status"/>',
+    summary:       '<fmt:message key="permalinkgenerator.audit.summary"/>',
+    genSuccess:    '<fmt:message key="permalinkgenerator.audit.generate.success"/>',
+    genZero:       '<fmt:message key="permalinkgenerator.audit.generate.zero"/>',
+    genError:      '<fmt:message key="permalinkgenerator.audit.generate.error"/>',
+    pillGenerated: '<fmt:message key="permalinkgenerator.audit.pill.generated"/>',
+    pillExisting:  '<fmt:message key="permalinkgenerator.audit.pill.existing"/>',
+    pillSelected:  '<fmt:message key="permalinkgenerator.audit.pill.selected"/>',
+    pillMissing:   '<fmt:message key="permalinkgenerator.audit.pill.missing"/>',
+    colLangTitle:  '<fmt:message key="permalinkgenerator.audit.col.lang.title"/>'
+};
 </script>
 
 <div class="pl-audit">
@@ -191,11 +212,14 @@ var _plExcludedPaths = [];
     <div id="plAuditResults" style="display:none;margin-top:16px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
             <span id="plAuditSummary" style="font-size:13px;font-weight:bold;"></span>
-            <button class="btn btn-success" id="plBtnGenerate" disabled>
-                <i class="icon-cog icon-white"></i>
-                <fmt:message key="permalinkgenerator.audit.generate"/>
-                (<span id="plSelCount">0</span>)
-            </button>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                <button class="btn btn-success" id="plBtnGenerate" disabled>
+                    <i class="icon-cog icon-white"></i>
+                    <fmt:message key="permalinkgenerator.audit.generate"/>
+                    (<span id="plSelCount">0</span>)
+                </button>
+                <span id="plGenStatus" style="font-size:12px;"></span>
+            </div>
         </div>
         <div class="pl-progress-wrap" id="plProgressWrap" style="display:none;">
             <div class="pl-progress-bar" id="plProgressBar"></div>
@@ -229,10 +253,10 @@ var _plExcludedPaths = [];
 (function () {
     var langs         = _plSiteLangs;
     var excludedPaths = _plExcludedPaths;
+    var i18n          = _plI18n;
     var contextPath   = '${pageContext.request.contextPath}';
     var sitePath      = '${fn:escapeXml(site.path)}';
     var actionUrl     = window.location.pathname.replace(/\.[^/]+\.html$/, '') + '.generatePermalinks.do';
-    console.log('[permalink-generator] actionUrl =', actionUrl);
     var BATCH         = 100;
 
     function isExcludedBySettings(nodePath) {
@@ -251,6 +275,7 @@ var _plExcludedPaths = [];
     var elTbody     = document.getElementById('plAuditTbody');
     var elSelCount  = document.getElementById('plSelCount');
     var elBtnGen    = document.getElementById('plBtnGenerate');
+    var elGenSt     = document.getElementById('plGenStatus');
     var elLoadWrap  = document.getElementById('plLoadMoreWrap');
     var elLoadSt    = document.getElementById('plLoadMoreStatus');
     var elScanSt    = document.getElementById('plScanStatus');
@@ -265,7 +290,7 @@ var _plExcludedPaths = [];
         langs.forEach(function (lang) {
             var th = document.createElement('th');
             th.className = 'pl-lang-th';
-            th.title = lang.toUpperCase() + ' — cliquer pour tout sélectionner / désélectionner';
+            th.title = i18n.colLangTitle.replace('{0}', lang.toUpperCase());
             th.dataset.lang = lang;
             th.innerHTML = lang.toUpperCase() + '<br/><input type="checkbox" class="pl-col-cb" data-lang="' + lang + '" style="margin:2px 0 0 0;" />';
             thead.appendChild(th);
@@ -307,7 +332,7 @@ var _plExcludedPaths = [];
         var scanPath = elPath.value.trim();
         if (!scanPath.startsWith('/sites/')) {
             elScanSt.style.color = '#c0392b';
-            elScanSt.textContent = 'Le chemin doit commencer par /sites/';
+            elScanSt.textContent = i18n.pathRequired;
             return;
         }
         if (reset) {
@@ -319,7 +344,7 @@ var _plExcludedPaths = [];
         scanning = true;
         document.getElementById('plBtnScan').disabled = true;
         elScanSt.style.color = '#666';
-        elScanSt.textContent = 'Scan en cours…';
+        elScanSt.textContent = i18n.scanRunning;
 
         var escapedPath = scanPath.replace(/'/g, "''");
         var GQL_QUERY = 'query($q:String!,$lim:Int!,$off:Int!){jcr{' +
@@ -346,7 +371,7 @@ var _plExcludedPaths = [];
                 });
                 if (errors.length && nodes.length === 0) {
                     elScanSt.style.color = '#c0392b';
-                    elScanSt.textContent = 'Erreur GraphQL : ' + errors.join('; ');
+                    elScanSt.textContent = i18n.errorGraphql.replace('{0}', errors.join('; '));
                     return;
                 }
                 var hasMore = results.some(function(data) {
@@ -374,18 +399,23 @@ var _plExcludedPaths = [];
 
                 elLoadWrap.style.display = hasMore ? 'block' : 'none';
                 elLoadSt.textContent = hasMore
-                    ? (offset + ' nœuds scannés, ' + missingRows.length + ' manquants trouvés')
+                    ? i18n.loadMoreSt.replace('{0}', offset).replace('{1}', missingRows.length)
                     : '';
-                elScanSt.style.color = missingRows.length > 0 ? '#333' : '#27ae60';
-                elScanSt.textContent = totalScanned + ' nœuds scannés — ' +
-                    missingRows.length + ' avec au moins un permalink manquant';
-                elResults.style.display = 'block';
-                updateSummary();
-                updateUI();
+
+                if (missingRows.length === 0 && !hasMore) {
+                    elScanSt.style.color = '#27ae60';
+                    elScanSt.textContent = i18n.allGood.replace('{0}', totalScanned);
+                } else {
+                    elScanSt.style.color = missingRows.length > 0 ? '#333' : '#27ae60';
+                    elScanSt.textContent = i18n.scanned.replace('{0}', totalScanned).replace('{1}', missingRows.length);
+                    elResults.style.display = 'block';
+                    updateSummary();
+                    updateUI();
+                }
             })
             .catch(function (e) {
                 elScanSt.style.color = '#c0392b';
-                elScanSt.textContent = 'Erreur : ' + (e.message || 'inconnue');
+                elScanSt.textContent = i18n.errorNetwork.replace('{0}', e.message || '?');
             })
             .finally(function () {
                 scanning = false;
@@ -444,15 +474,15 @@ var _plExcludedPaths = [];
         pill.className = 'pl-pill';
         if (row.generated.has(lang)) {
             pill.className += ' pl-pill-gen'; pill.textContent = lang;
-            pill.title = 'Généré';
+            pill.title = i18n.pillGenerated;
         } else if (!row.missing.has(lang)) {
             pill.className += ' pl-pill-has'; pill.textContent = lang;
-            pill.title = 'Vanity existant';
+            pill.title = i18n.pillExisting;
         } else {
             var isSel = !!(selections[row.uuid] && selections[row.uuid].has(lang));
             pill.className += isSel ? ' pl-pill-sel' : ' pl-pill-miss';
             pill.textContent = lang;
-            pill.title = isSel ? 'Sélectionné — cliquer pour désélectionner' : 'Manquant — cliquer pour sélectionner';
+            pill.title = isSel ? i18n.pillSelected : i18n.pillMissing;
             (function (r, l, p, td) {
                 p.addEventListener('click', function () {
                     if (selections[r.uuid] && selections[r.uuid].has(l)) deselectCell(r.uuid, l);
@@ -503,7 +533,7 @@ var _plExcludedPaths = [];
 
     // ── UI sync ────────────────────────────────────────────────
     function updateSummary() {
-        elSummary.textContent = missingRows.length + ' nœud(s) avec au moins un permalink manquant';
+        elSummary.textContent = i18n.summary.replace('{0}', missingRows.length);
     }
     function updateUI() {
         var n = totalSelected();
@@ -545,19 +575,21 @@ var _plExcludedPaths = [];
         var total = totalSelected();
         var done  = 0;
         elBtnGen.disabled = true;
+        elGenSt.style.color = '#666';
+        elGenSt.textContent = '';
         elProgWrap.style.display = 'block';
-        elProgBar.style.width = '0%';
+        elProgBar.style.transform = 'scaleX(0)';
 
         // Process each language's nodes in chunks of 20
         function runLang(li) {
             if (li >= langKeys.length) {
                 elProgWrap.style.display = 'none';
                 if (done > 0) {
-                    elScanSt.style.color = '#27ae60';
-                    elScanSt.textContent = '✓ ' + done + ' permalink(s) générés';
-                } else if (elScanSt.style.color !== 'rgb(192, 57, 43)') {
-                    elScanSt.style.color = '#e67e22';
-                    elScanSt.textContent = '0 permalink(s) générés — vérifier les logs serveur';
+                    elGenSt.style.color = '#27ae60';
+                    elGenSt.textContent = i18n.genSuccess.replace('{0}', done);
+                } else if (elGenSt.style.color !== 'rgb(192, 57, 43)') {
+                    elGenSt.style.color = '#e67e22';
+                    elGenSt.textContent = i18n.genZero;
                 }
                 elBtnGen.disabled = (totalSelected() === 0);
                 return;
@@ -593,15 +625,14 @@ var _plExcludedPaths = [];
                             row.generated.add(lang);
                             deselectCell(uuid, lang);
                             done++;
-                            elProgBar.style.width = Math.min(100, Math.round((done / total) * 100)) + '%';
+                            elProgBar.style.transform = 'scaleX(' + Math.min(1, done / total) + ')';
                             refreshRowCells(row);
                         });
                         updateUI();
                     },
                     error: function (xhr) {
-                        console.log('[permalink-generator] generate error', xhr.status, xhr.responseText);
-                        elScanSt.style.color = '#c0392b';
-                        elScanSt.textContent = 'Erreur HTTP ' + xhr.status + ' (' + lang + ') — vérifier les logs serveur';
+                        elGenSt.style.color = '#c0392b';
+                        elGenSt.textContent = i18n.genError.replace('{0}', xhr.status).replace('{1}', lang);
                         chunks[ci].forEach(function (uuid) {
                             var row = missingRows.find(function (r) { return r.uuid === uuid; });
                             if (row) { var td = document.querySelector('#pl-row-' + uuid + ' td[data-lang="' + lang + '"]'); if (td) renderCell(td, row, lang); }
