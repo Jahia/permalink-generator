@@ -58,7 +58,7 @@
                 <extensions>true</extensions>
                 <configuration>
                     <instructions>
-                        <Jahia-Depends>default, seo</Jahia-Depends>
+                        <Jahia-Depends>default,seo</Jahia-Depends>
                         <_dsannotations>*</_dsannotations>
                     </instructions>
                 </configuration>

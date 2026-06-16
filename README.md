@@ -51,8 +51,18 @@ On move, the slug of each page is preserved — only the prefix changes. Descend
 - [slugify](https://github.com/slugify/slugify) 2.4
 - Jahia `seo` module
 
+## Site settings & audit panel
+
+An administration panel is available under **Site Settings → Permalink Generator**:
+
+- **Mode** — `SMART` (default): respects manually-created vanities and never overwrites them. `FORCE`: regenerates all auto-managed vanities even if a manual one exists.
+- **Excluded paths** — JCR paths (one per line) for which no vanity will ever be created or updated.
+- **Audit** — scans all `jnt:page` and `jmix:mainResource` nodes under a given path, lists nodes with missing vanities per language, and lets you generate the missing ones in bulk.
+
 ## Technical notes
 
 - `PermalinkGeneratorService` is a Spring bean with `@Autowired VanityUrlManager`, registered as a Drools global via `ModuleGlobalObject`
+- `GeneratePermalinksAction` — Jahia action (`POST *.generatePermalinks.do`) used by the audit panel to bulk-create missing vanities; accepts `nodeIds[]` and `languages[]` POST parameters
 - `jmix:permalinkGenerated` mixin defined in `META-INF/definitions.cnd`
 - Rules in `META-INF/rules.drl` / `META-INF/rules.dsl`
+- Audit panel uses two parallel GraphQL queries (`jnt:page` + `jmix:mainResource`) deduped by UUID, matching sitemap content types

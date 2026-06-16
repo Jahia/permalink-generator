@@ -12,6 +12,12 @@
     <bean id="permalinkGeneratorService"
           class="org.jahiacommunity.modules.permalinkgenerator.services.PermalinkGeneratorService"/>
 
+    <bean id="org.jahiacommunity.modules.permalinkgenerator.action.GeneratePermalinksAction"
+          class="org.jahiacommunity.modules.permalinkgenerator.action.GeneratePermalinksAction">
+        <property name="name" value="generatePermalinks"/>
+        <property name="requiredMethods" value="POST"/>
+    </bean>
+
     <bean class="org.jahia.services.content.rules.ModuleGlobalObject">
         <property name="globalRulesObject">
             <map>

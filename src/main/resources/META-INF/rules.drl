@@ -51,7 +51,6 @@ end
 rule "Mark vanity as manual when editor changes its URL"
 when
     A property j:url has been set on a node
-    - the node has type jmix:permalinkGenerated
     - not in operation import
     - not in operation copy
 then

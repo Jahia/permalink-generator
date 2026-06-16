@@ -12,3 +12,4 @@ buildNumber.properties
 .mvn/wrapper/maven-wrapper.jar
 /.idea/
 /permalink-generator.iml
+/.understand-anything/

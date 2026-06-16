@@ -11,12 +11,19 @@
 
 <c:set var="currentMode" value="${site.hasProperty('j:permalinkGeneratorMode') ? site.getProperty('j:permalinkGeneratorMode').string : 'SMART'}"/>
 
-<fmt:message key="permalinkgenerator.mode.SMART.title"    var="titleSmart"/>
-<fmt:message key="permalinkgenerator.mode.SMART.help"     var="helpSmart"/>
-<fmt:message key="permalinkgenerator.mode.FORCE.title"    var="titleForce"/>
-<fmt:message key="permalinkgenerator.mode.FORCE.help"     var="helpForce"/>
-<fmt:message key="permalinkgenerator.mode.DISABLED.title" var="titleDisabled"/>
-<fmt:message key="permalinkgenerator.mode.DISABLED.help"  var="helpDisabled"/>
+<fmt:message key="permalinkgenerator.mode.SMART.title" var="titleSmart"/>
+<fmt:message key="permalinkgenerator.mode.SMART.help"  var="helpSmart"/>
+<fmt:message key="permalinkgenerator.mode.FORCE.title" var="titleForce"/>
+<fmt:message key="permalinkgenerator.mode.FORCE.help"  var="helpForce"/>
+<fmt:message key="label.save"                          var="labelSave"/>
+
+<c:set var="excludedPathsList" value=""/>
+<c:if test="${site.hasProperty('j:excludedPaths')}">
+    <c:forEach items="${site.getProperty('j:excludedPaths').values}" var="epVal" varStatus="epStatus">
+        <c:if test="${!epStatus.first}"><c:set var="excludedPathsList" value="${excludedPathsList}&#10;"/></c:if>
+        <c:set var="excludedPathsList" value="${excludedPathsList}${epVal.string}"/>
+    </c:forEach>
+</c:if>
 
 <style>
     .permalink-mode-panel {
@@ -55,6 +62,18 @@
         <p id="modeHelp"></p>
     </div>
 
+    <div class="control-group" style="margin-top:20px;">
+        <label class="control-label" for="excludedPaths" style="font-weight:bold;">
+            <fmt:message key="permalinkgenerator.excludedPaths.label"/>
+        </label>
+        <div class="controls">
+            <textarea id="excludedPaths" class="input-xlarge" rows="5"
+                      placeholder="/sites/mysite/contents/legacy"
+                      style="font-family:monospace;font-size:12px;">${fn:escapeXml(excludedPathsList)}</textarea>
+            <p class="help-block"><fmt:message key="permalinkgenerator.excludedPaths.help"/></p>
+        </div>
+    </div>
+
     <div style="margin-top:20px;">
         <button class="btn btn-primary" id="btnSave"><fmt:message key="label.save"/></button>
         <button class="btn" id="btnCancel"><fmt:message key="label.cancel"/></button>
@@ -86,27 +105,534 @@
     select.addEventListener('change', updatePanel);
     updatePanel();
 
-    var GQL = 'mutation setPermalinkMode($path:String!,$mode:String!){jcr{mutateNode(pathOrId:$path){addMixins(mixins:["jmix:permalinkGeneratorSettings"]) mutateProperty(name:"j:permalinkGeneratorMode"){setValue(type:STRING,value:$mode)}}}}';
+    var labelSave = '${fn:escapeXml(labelSave)}';
+    var GQL = 'mutation setPermalinkSettings($path:String!,$mode:String!,$paths:[String]!){jcr{mutateNode(pathOrId:$path){addMixins(mixins:["jmix:permalinkGeneratorSettings"]) mutateProperty(name:"j:permalinkGeneratorMode"){setValue(type:STRING,value:$mode)} mutateProperty(name:"j:excludedPaths"){setValues(type:STRING,values:$paths)}}}}';
 
     var status = document.getElementById('saveStatus');
 
     document.getElementById('btnSave').addEventListener('click', function () {
         var btn = this; btn.disabled = true; status.textContent = '';
+        var paths = document.getElementById('excludedPaths').value
+            .split('\n').map(function (p) { return p.trim(); }).filter(function (p) { return p.length > 0; });
         fetch(contextPath + '/modules/graphql', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
             credentials: 'include',
-            body: JSON.stringify({ query: GQL, variables: { path: sitePath, mode: select.value } })
+            body: JSON.stringify({ query: GQL, variables: { path: sitePath, mode: select.value, paths: paths } })
         })
         .then(function (r) { return r.json(); })
         .then(function (d) {
             if (d.errors) { status.style.color = '#c0392b'; status.textContent = d.errors[0].message; }
-            else          { status.style.color = '#27ae60'; status.textContent = '✓ <fmt:message key="label.save"/>'; }
+            else          { status.style.color = '#27ae60'; status.textContent = '✓ ' + labelSave; }
         })
         .catch(function (e) { status.style.color = '#c0392b'; status.textContent = e.message || 'Error'; })
         .finally(function () { btn.disabled = false; });
     });
 
     document.getElementById('btnCancel').addEventListener('click', function () { window.location.reload(); });
+}());
+</script>
+
+<%-- ═══════════════════════════════════════════════════════════════════════
+     AUDIT SECTION — Find renderableMainResource nodes without vanity URLs
+     ═══════════════════════════════════════════════════════════════════════ --%>
+
+<style>
+.pl-audit { margin-top: 32px; border-top: 2px solid #e0e0e0; padding-top: 24px; max-width: 960px; }
+.pl-audit h3 { margin-top: 0; font-size: 18px; }
+.pl-audit-table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 0; }
+.pl-audit-table th { background: #f0f4f8; padding: 7px 8px; text-align: left;
+                     border-bottom: 2px solid #ccd6e0; white-space: nowrap; }
+.pl-audit-table td { padding: 6px 8px; border-bottom: 1px solid #eaeaea; vertical-align: middle; }
+.pl-audit-table tr.pl-row-done td { opacity: 0.45; }
+.pl-audit-table tr:hover td { background: #f9fbfd; }
+.pl-lang-th { text-align: center !important; width: 44px; cursor: pointer; user-select: none; }
+.pl-lang-th:hover { background: #dde8f0 !important; }
+.pl-pill { display: inline-block; min-width: 28px; padding: 2px 5px; border-radius: 3px;
+           font-size: 10px; font-weight: bold; text-transform: uppercase; }
+.pl-pill-has  { background: #d4edda; color: #155724; cursor: default; }
+.pl-pill-miss { background: #f8d7da; color: #721c24; cursor: pointer; }
+.pl-pill-sel  { background: #fff3cd; color: #856404; cursor: pointer; outline: 2px solid #ffc107; }
+.pl-pill-gen  { background: #d4edda; color: #155724; cursor: default; }
+.pl-pill-spin { background: #cce5ff; color: #004085; cursor: default; }
+.pl-progress-wrap { background: #e9ecef; border-radius: 3px; height: 5px; margin-bottom: 10px; }
+.pl-progress-bar  { height: 5px; background: #3c8cba; border-radius: 3px;
+                    width: 0%; transition: width 0.25s ease; }
+</style>
+
+<%-- Expose site languages and excluded paths to JS before the IIFE --%>
+<script>
+var _plSiteLangs = [];
+<c:forEach items="${site.languages}" var="_l">_plSiteLangs.push('${_l}');</c:forEach>
+_plSiteLangs.sort();
+var _plExcludedPaths = [];
+<c:if test="${site.hasProperty('j:excludedPaths')}"><c:forEach items="${site.getProperty('j:excludedPaths').values}" var="_ep">_plExcludedPaths.push('${fn:escapeXml(_ep.string)}');</c:forEach></c:if>
+</script>
+
+<div class="pl-audit">
+    <h3><fmt:message key="permalinkgenerator.audit.title"/></h3>
+    <p class="text-muted"><fmt:message key="permalinkgenerator.audit.description"/></p>
+
+    <div class="control-group">
+        <label class="control-label" for="plAuditPath" style="font-weight:bold;">
+            <fmt:message key="permalinkgenerator.audit.startPath"/>
+        </label>
+        <div class="controls" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <input type="text" id="plAuditPath" class="input-xlarge"
+                   value="${fn:escapeXml(site.path)}"
+                   style="font-family:monospace;font-size:12px;"/>
+            <button class="btn" id="plBtnScan">
+                <i class="icon-search"></i> <fmt:message key="permalinkgenerator.audit.scan"/>
+            </button>
+            <span id="plScanStatus" style="font-size:12px;color:#666;"></span>
+        </div>
+    </div>
+
+    <div id="plAuditResults" style="display:none;margin-top:16px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+            <span id="plAuditSummary" style="font-size:13px;font-weight:bold;"></span>
+            <button class="btn btn-success" id="plBtnGenerate" disabled>
+                <i class="icon-cog icon-white"></i>
+                <fmt:message key="permalinkgenerator.audit.generate"/>
+                (<span id="plSelCount">0</span>)
+            </button>
+        </div>
+        <div class="pl-progress-wrap" id="plProgressWrap" style="display:none;">
+            <div class="pl-progress-bar" id="plProgressBar"></div>
+        </div>
+        <div style="overflow-x:auto;">
+            <table class="pl-audit-table" id="plAuditTable">
+                <thead>
+                    <tr id="plAuditThead">
+                        <th style="width:28px;">
+                            <input type="checkbox" id="plSelectAll"
+                                   title="<fmt:message key='permalinkgenerator.audit.selectAll'/>"/>
+                        </th>
+                        <th><fmt:message key="permalinkgenerator.audit.col.title"/></th>
+                        <th><fmt:message key="permalinkgenerator.audit.col.path"/></th>
+                        <%-- Language columns injected by JS --%>
+                    </tr>
+                </thead>
+                <tbody id="plAuditTbody"></tbody>
+            </table>
+        </div>
+        <div id="plLoadMoreWrap" style="text-align:center;margin-top:12px;display:none;">
+            <button class="btn" id="plBtnLoadMore">
+                <fmt:message key="permalinkgenerator.audit.loadMore"/>
+            </button>
+            <span id="plLoadMoreStatus" style="font-size:12px;color:#777;margin-left:8px;"></span>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var langs         = _plSiteLangs;
+    var excludedPaths = _plExcludedPaths;
+    var contextPath   = '${pageContext.request.contextPath}';
+    var sitePath      = '${fn:escapeXml(site.path)}';
+    var actionUrl     = window.location.pathname.replace(/\.[^/]+\.html$/, '') + '.generatePermalinks.do';
+    console.log('[permalink-generator] actionUrl =', actionUrl);
+    var BATCH         = 100;
+
+    function isExcludedBySettings(nodePath) {
+        return excludedPaths.some(function (ep) { return ep && nodePath.startsWith(ep); });
+    }
+
+    var offset       = 0;
+    var totalScanned = 0;
+    var missingRows  = []; // { uuid, path, displayName, missing:Set<lang>, generated:Set<lang> }
+    var selections   = {}; // { uuid: Set<lang> }
+    var scanning     = false;
+
+    // DOM refs
+    var elResults   = document.getElementById('plAuditResults');
+    var elSummary   = document.getElementById('plAuditSummary');
+    var elTbody     = document.getElementById('plAuditTbody');
+    var elSelCount  = document.getElementById('plSelCount');
+    var elBtnGen    = document.getElementById('plBtnGenerate');
+    var elLoadWrap  = document.getElementById('plLoadMoreWrap');
+    var elLoadSt    = document.getElementById('plLoadMoreStatus');
+    var elScanSt    = document.getElementById('plScanStatus');
+    var elProgBar   = document.getElementById('plProgressBar');
+    var elProgWrap  = document.getElementById('plProgressWrap');
+    var elSelectAll = document.getElementById('plSelectAll');
+    var elPath      = document.getElementById('plAuditPath');
+
+    // ── Build language column headers ──────────────────────────
+    function buildLangHeaders() {
+        var thead = document.getElementById('plAuditThead');
+        langs.forEach(function (lang) {
+            var th = document.createElement('th');
+            th.className = 'pl-lang-th';
+            th.title = lang.toUpperCase() + ' — cliquer pour tout sélectionner / désélectionner';
+            th.dataset.lang = lang;
+            th.innerHTML = lang.toUpperCase() + '<br/><input type="checkbox" class="pl-col-cb" data-lang="' + lang + '" style="margin:2px 0 0 0;" />';
+            thead.appendChild(th);
+        });
+        document.querySelectorAll('.pl-col-cb').forEach(function (cb) {
+            cb.addEventListener('change', function (e) {
+                e.stopPropagation();
+                var lang = cb.dataset.lang;
+                missingRows.forEach(function (row) {
+                    if (!row.missing.has(lang) || row.generated.has(lang)) return;
+                    if (cb.checked) selectCell(row.uuid, lang);
+                    else            deselectCell(row.uuid, lang);
+                });
+                refreshAllCells();
+                updateUI();
+            });
+        });
+    }
+
+    // ── GraphQL helper ─────────────────────────────────────────
+    function gql(body) {
+        return fetch(contextPath + '/modules/graphql', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'include',
+            body: JSON.stringify(body)
+        }).then(function (r) { return r.json(); });
+    }
+
+    function hasActiveDefault(vanityUrls, lang) {
+        return (vanityUrls || []).some(function (v) {
+            return v.language === lang && v.active && v['default'];
+        });
+    }
+
+    // ── Scan ───────────────────────────────────────────────────
+    function doScan(reset) {
+        if (scanning) return;
+        var scanPath = elPath.value.trim();
+        if (!scanPath.startsWith('/sites/')) {
+            elScanSt.style.color = '#c0392b';
+            elScanSt.textContent = 'Le chemin doit commencer par /sites/';
+            return;
+        }
+        if (reset) {
+            offset = 0; totalScanned = 0; missingRows = []; selections = {};
+            elTbody.innerHTML = '';
+            elResults.style.display = 'none';
+        }
+
+        scanning = true;
+        document.getElementById('plBtnScan').disabled = true;
+        elScanSt.style.color = '#666';
+        elScanSt.textContent = 'Scan en cours…';
+
+        var escapedPath = scanPath.replace(/'/g, "''");
+        var GQL_QUERY = 'query($q:String!,$lim:Int!,$off:Int!){jcr{' +
+            'nodesByQuery(query:$q,queryLanguage:SQL2,limit:$lim,offset:$off){' +
+            'nodes{uuid path displayName vanityUrls{url language active default}}}}}';
+        var qPage = "SELECT * FROM [jnt:page] AS n WHERE ISDESCENDANTNODE(n, '" + escapedPath + "')";
+        var qMixin = "SELECT * FROM [jmix:mainResource] AS n WHERE ISDESCENDANTNODE(n, '" + escapedPath + "')";
+
+        Promise.all([
+            gql({ query: GQL_QUERY, variables: { q: qPage,  lim: BATCH, off: offset } }),
+            gql({ query: GQL_QUERY, variables: { q: qMixin, lim: BATCH, off: offset } })
+        ]).then(function (results) {
+                var nodes = [];
+                var seen = {};
+                var errors = [];
+                results.forEach(function (data) {
+                    var errs = (data.errors || []).map(function(e){ return e.message; });
+                    if (errs.length) { errors = errors.concat(errs); return; }
+                    var batch = [];
+                    try { batch = data.data.jcr.nodesByQuery.nodes || []; } catch (e) {}
+                    batch.forEach(function (n) {
+                        if (!seen[n.uuid]) { seen[n.uuid] = true; nodes.push(n); }
+                    });
+                });
+                if (errors.length && nodes.length === 0) {
+                    elScanSt.style.color = '#c0392b';
+                    elScanSt.textContent = 'Erreur GraphQL : ' + errors.join('; ');
+                    return;
+                }
+                var hasMore = results.some(function(data) {
+                    try { return (data.data.jcr.nodesByQuery.nodes || []).length === BATCH; } catch(e) { return false; }
+                });
+
+                totalScanned += nodes.length;
+                offset += BATCH; // advance by BATCH; both queries use same offset
+
+                nodes.forEach(function (n) {
+                    if (isExcludedBySettings(n.path)) return;
+                    var missing = new Set(langs.filter(function (l) {
+                        return !hasActiveDefault(n.vanityUrls, l);
+                    }));
+                    if (missing.size === 0) return;
+                    missingRows.push({
+                        uuid: n.uuid,
+                        path: n.path,
+                        displayName: n.displayName || n.path.split('/').pop(),
+                        missing: missing,
+                        generated: new Set()
+                    });
+                    appendRow(missingRows[missingRows.length - 1]);
+                });
+
+                elLoadWrap.style.display = hasMore ? 'block' : 'none';
+                elLoadSt.textContent = hasMore
+                    ? (offset + ' nœuds scannés, ' + missingRows.length + ' manquants trouvés')
+                    : '';
+                elScanSt.style.color = missingRows.length > 0 ? '#333' : '#27ae60';
+                elScanSt.textContent = totalScanned + ' nœuds scannés — ' +
+                    missingRows.length + ' avec au moins un permalink manquant';
+                elResults.style.display = 'block';
+                updateSummary();
+                updateUI();
+            })
+            .catch(function (e) {
+                elScanSt.style.color = '#c0392b';
+                elScanSt.textContent = 'Erreur : ' + (e.message || 'inconnue');
+            })
+            .finally(function () {
+                scanning = false;
+                document.getElementById('plBtnScan').disabled = false;
+            });
+    }
+
+    // ── Table row ──────────────────────────────────────────────
+    function appendRow(row) {
+        var tr = document.createElement('tr');
+        tr.id = 'pl-row-' + row.uuid;
+        tr.className = 'pl-audit-row';
+
+        // Checkbox
+        var tdCb = document.createElement('td');
+        var cb = document.createElement('input');
+        cb.type = 'checkbox'; cb.className = 'pl-row-cb'; cb.dataset.uuid = row.uuid;
+        cb.addEventListener('change', function () {
+            if (cb.checked) {
+                row.missing.forEach(function (l) { if (!row.generated.has(l)) selectCell(row.uuid, l); });
+            } else {
+                langs.forEach(function (l) { deselectCell(row.uuid, l); });
+            }
+            refreshRowCells(row);
+            updateUI();
+        });
+        tdCb.appendChild(cb); tr.appendChild(tdCb);
+
+        // Title
+        var tdTitle = document.createElement('td');
+        tdTitle.style.cssText = 'max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+        tdTitle.title = row.displayName; tdTitle.textContent = row.displayName;
+        tr.appendChild(tdTitle);
+
+        // Path
+        var tdPath = document.createElement('td');
+        tdPath.style.cssText = 'font-family:monospace;font-size:11px;color:#666;max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+        tdPath.title = row.path; tdPath.textContent = row.path;
+        tr.appendChild(tdPath);
+
+        // Language cells
+        langs.forEach(function (lang) {
+            var td = document.createElement('td');
+            td.style.textAlign = 'center';
+            td.dataset.uuid = row.uuid; td.dataset.lang = lang;
+            renderCell(td, row, lang);
+            tr.appendChild(td);
+        });
+
+        elTbody.appendChild(tr);
+    }
+
+    function renderCell(td, row, lang) {
+        td.innerHTML = '';
+        var pill = document.createElement('span');
+        pill.className = 'pl-pill';
+        if (row.generated.has(lang)) {
+            pill.className += ' pl-pill-gen'; pill.textContent = lang;
+            pill.title = 'Généré';
+        } else if (!row.missing.has(lang)) {
+            pill.className += ' pl-pill-has'; pill.textContent = lang;
+            pill.title = 'Vanity existant';
+        } else {
+            var isSel = !!(selections[row.uuid] && selections[row.uuid].has(lang));
+            pill.className += isSel ? ' pl-pill-sel' : ' pl-pill-miss';
+            pill.textContent = lang;
+            pill.title = isSel ? 'Sélectionné — cliquer pour désélectionner' : 'Manquant — cliquer pour sélectionner';
+            (function (r, l, p, td) {
+                p.addEventListener('click', function () {
+                    if (selections[r.uuid] && selections[r.uuid].has(l)) deselectCell(r.uuid, l);
+                    else selectCell(r.uuid, l);
+                    renderCell(td, r, l);
+                    updateUI();
+                });
+            }(row, lang, pill, td));
+        }
+        td.appendChild(pill);
+    }
+
+    function refreshRowCells(row) {
+        langs.forEach(function (lang) {
+            var td = document.querySelector('#pl-row-' + row.uuid + ' td[data-lang="' + lang + '"]');
+            if (td) renderCell(td, row, lang);
+        });
+        syncRowCheckbox(row);
+        var allDone = langs.every(function (l) { return !row.missing.has(l) || row.generated.has(l); });
+        var tr = document.getElementById('pl-row-' + row.uuid);
+        if (tr) tr.classList.toggle('pl-row-done', allDone);
+    }
+
+    function refreshAllCells() {
+        missingRows.forEach(function (row) { refreshRowCells(row); });
+    }
+
+    function syncRowCheckbox(row) {
+        var cb = document.querySelector('#pl-row-' + row.uuid + ' .pl-row-cb');
+        if (!cb) return;
+        var missingActive = Array.from(row.missing).filter(function (l) { return !row.generated.has(l); });
+        cb.checked = missingActive.length > 0 && missingActive.every(function (l) {
+            return selections[row.uuid] && selections[row.uuid].has(l);
+        });
+    }
+
+    // ── Selection helpers ──────────────────────────────────────
+    function selectCell(uuid, lang) {
+        if (!selections[uuid]) selections[uuid] = new Set();
+        selections[uuid].add(lang);
+    }
+    function deselectCell(uuid, lang) {
+        if (selections[uuid]) { selections[uuid].delete(lang); if (selections[uuid].size === 0) delete selections[uuid]; }
+    }
+    function totalSelected() {
+        var n = 0; Object.keys(selections).forEach(function (uid) { n += selections[uid].size; }); return n;
+    }
+
+    // ── UI sync ────────────────────────────────────────────────
+    function updateSummary() {
+        elSummary.textContent = missingRows.length + ' nœud(s) avec au moins un permalink manquant';
+    }
+    function updateUI() {
+        var n = totalSelected();
+        elSelCount.textContent = n;
+        elBtnGen.disabled = (n === 0);
+
+        // Sync select-all
+        var allMissing = missingRows.reduce(function (acc, row) {
+            Array.from(row.missing).forEach(function (l) { if (!row.generated.has(l)) acc.push({ uuid: row.uuid, l: l }); });
+            return acc;
+        }, []);
+        elSelectAll.checked = allMissing.length > 0 && allMissing.every(function (item) {
+            return selections[item.uuid] && selections[item.uuid].has(item.l);
+        });
+
+        // Sync column checkboxes
+        document.querySelectorAll('.pl-col-cb').forEach(function (cb) {
+            var lang = cb.dataset.lang;
+            var colMissing = missingRows.filter(function (row) { return row.missing.has(lang) && !row.generated.has(lang); });
+            cb.checked = colMissing.length > 0 && colMissing.every(function (row) {
+                return selections[row.uuid] && selections[row.uuid].has(lang);
+            });
+        });
+    }
+
+    // ── Generate ───────────────────────────────────────────────
+    function doGenerate() {
+        // Group by language: { lang: [uuid, ...] }
+        var byLang = {};
+        Object.keys(selections).forEach(function (uuid) {
+            selections[uuid].forEach(function (lang) {
+                if (!byLang[lang]) byLang[lang] = [];
+                byLang[lang].push(uuid);
+            });
+        });
+        var langKeys = Object.keys(byLang);
+        if (langKeys.length === 0) return;
+
+        var total = totalSelected();
+        var done  = 0;
+        elBtnGen.disabled = true;
+        elProgWrap.style.display = 'block';
+        elProgBar.style.width = '0%';
+
+        // Process each language's nodes in chunks of 20
+        function runLang(li) {
+            if (li >= langKeys.length) {
+                elProgWrap.style.display = 'none';
+                if (done > 0) {
+                    elScanSt.style.color = '#27ae60';
+                    elScanSt.textContent = '✓ ' + done + ' permalink(s) générés';
+                } else if (elScanSt.style.color !== 'rgb(192, 57, 43)') {
+                    elScanSt.style.color = '#e67e22';
+                    elScanSt.textContent = '0 permalink(s) générés — vérifier les logs serveur';
+                }
+                elBtnGen.disabled = (totalSelected() === 0);
+                return;
+            }
+            var lang  = langKeys[li];
+            var uuids = byLang[lang];
+            var CHUNK = 20;
+            var chunks = [];
+            for (var c = 0; c < uuids.length; c += CHUNK) chunks.push(uuids.slice(c, c + CHUNK));
+
+            function runChunk(ci) {
+                if (ci >= chunks.length) { runLang(li + 1); return; }
+
+                // Optimistic UI: show spinner
+                chunks[ci].forEach(function (uuid) {
+                    var td = document.querySelector('#pl-row-' + uuid + ' td[data-lang="' + lang + '"]');
+                    if (td) { td.innerHTML = '<span class="pl-pill pl-pill-spin">' + lang + '</span>'; }
+                });
+
+                var params = new URLSearchParams();
+                chunks[ci].forEach(function (uid) { params.append('nodeIds[]', uid); });
+                params.append('languages[]', lang);
+
+                $.ajax({
+                    url: actionUrl,
+                    method: 'POST',
+                    contentType: 'application/x-www-form-urlencoded',
+                    data: params.toString(),
+                    success: function (data, textStatus, xhr) {
+                        chunks[ci].forEach(function (uuid) {
+                            var row = missingRows.find(function (r) { return r.uuid === uuid; });
+                            if (!row) return;
+                            row.generated.add(lang);
+                            deselectCell(uuid, lang);
+                            done++;
+                            elProgBar.style.width = Math.min(100, Math.round((done / total) * 100)) + '%';
+                            refreshRowCells(row);
+                        });
+                        updateUI();
+                    },
+                    error: function (xhr) {
+                        console.log('[permalink-generator] generate error', xhr.status, xhr.responseText);
+                        elScanSt.style.color = '#c0392b';
+                        elScanSt.textContent = 'Erreur HTTP ' + xhr.status + ' (' + lang + ') — vérifier les logs serveur';
+                        chunks[ci].forEach(function (uuid) {
+                            var row = missingRows.find(function (r) { return r.uuid === uuid; });
+                            if (row) { var td = document.querySelector('#pl-row-' + uuid + ' td[data-lang="' + lang + '"]'); if (td) renderCell(td, row, lang); }
+                        });
+                    },
+                    complete: function () { runChunk(ci + 1); }
+                });
+            }
+            runChunk(0);
+        }
+        runLang(0);
+    }
+
+    // ── Event listeners ────────────────────────────────────────
+    document.getElementById('plBtnScan').addEventListener('click', function () { doScan(true); });
+    document.getElementById('plBtnLoadMore').addEventListener('click', function () { doScan(false); });
+    elBtnGen.addEventListener('click', doGenerate);
+
+    elSelectAll.addEventListener('change', function () {
+        if (elSelectAll.checked) {
+            missingRows.forEach(function (row) {
+                row.missing.forEach(function (l) { if (!row.generated.has(l)) selectCell(row.uuid, l); });
+            });
+        } else {
+            selections = {};
+        }
+        refreshAllCells();
+        updateUI();
+    });
+
+    // Inject language columns
+    buildLangHeaders();
 }());
 </script>

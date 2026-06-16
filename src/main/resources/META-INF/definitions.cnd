@@ -10,11 +10,13 @@
  itemtype = options
  - j:permalinkGeneratorMode (string) = 'SMART' nofulltext
    < 'SMART', 'FORCE'
+ - j:excludedPaths (string) multiple nofulltext
 
 // Applied to a page: the module will never create or update vanities on this node or its descendants
 [jmix:permalinkExcluded] mixin
  extends = jmix:navMenuItem
  itemtype = options
 
-// Content node used to render the site settings admin page
+// Content node for the site settings admin page (rendered by the Spring Web Flow)
 [jnt:permalinkGeneratorSiteSettings] > jnt:content, mix:title, jmix:studioOnly, jmix:siteComponent
+
