@@ -99,14 +99,14 @@
     function updatePanel() {
         var m = modes[select.value] || modes.SMART;
         panel.className = 'permalink-mode-panel ' + m.css;
-        titleEl.textContent = m.title;
-        helpEl.textContent  = m.help;
+        titleEl.innerHTML = m.title;
+        helpEl.innerHTML  = m.help;
     }
     select.addEventListener('change', updatePanel);
     updatePanel();
 
     var labelSave = '${fn:escapeXml(labelSave)}';
-    var GQL = 'mutation setPermalinkSettings($path:String!,$mode:String!,$paths:[String]!){jcr{mutateNode(pathOrId:$path){addMixins(mixins:["jmix:permalinkGeneratorSettings"]) mutateProperty(name:"j:permalinkGeneratorMode"){setValue(type:STRING,value:$mode)} mutateProperty(name:"j:excludedPaths"){setValues(type:STRING,values:$paths)}}}}';
+    var GQL = 'mutation setPermalinkSettings($path:String!,$mode:String!,$paths:[String]!){jcr{mutateNode(pathOrId:$path){addMixins(mixins:["jmix:permalinkGeneratorSettings"]) modeProperty:mutateProperty(name:"j:permalinkGeneratorMode"){setValue(type:STRING,value:$mode)} excludedPaths:mutateProperty(name:"j:excludedPaths"){setValues(type:STRING,values:$paths)}}}}';
 
     var status = document.getElementById('saveStatus');
 
@@ -160,6 +160,10 @@
                     width: 100%; transform: scaleX(0); transform-origin: left;
                     transition: transform 0.25s ease-out; will-change: transform; }
 @media (prefers-reduced-motion: reduce) { .pl-progress-bar { transition: none; } }
+.pl-notitle { font-style: italic; }
+.pl-audit-table tr.pl-row-ignored td { opacity: 0.45; pointer-events: none; }
+.pl-regen { margin-top: 32px; border-top: 2px solid #e0e0e0; padding-top: 24px; max-width: 960px; }
+.pl-regen h3 { margin-top: 0; font-size: 18px; color: #555; }
 </style>
 
 <%-- Expose site languages, excluded paths, and i18n strings to JS before the IIFE --%>
@@ -186,7 +190,14 @@ var _plI18n = {
     pillExisting:  '<fmt:message key="permalinkgenerator.audit.pill.existing"/>',
     pillSelected:  '<fmt:message key="permalinkgenerator.audit.pill.selected"/>',
     pillMissing:   '<fmt:message key="permalinkgenerator.audit.pill.missing"/>',
-    colLangTitle:  '<fmt:message key="permalinkgenerator.audit.col.lang.title"/>'
+    colLangTitle:  '<fmt:message key="permalinkgenerator.audit.col.lang.title"/>',
+    pillNoTitle:   '<fmt:message key="permalinkgenerator.regen.pill.noTitle"/>',
+    pillHasForce:  '<fmt:message key="permalinkgenerator.regen.pill.hasForce"/>',
+    pillSelForce:  '<fmt:message key="permalinkgenerator.regen.pill.selForce"/>',
+    regenSummary:  '<fmt:message key="permalinkgenerator.regen.summary"/>',
+    regenSuccess:  '<fmt:message key="permalinkgenerator.regen.generate.success"/>',
+    regenZero:     '<fmt:message key="permalinkgenerator.regen.generate.zero"/>',
+    regenError:    '<fmt:message key="permalinkgenerator.regen.generate.error"/>'
 };
 </script>
 
@@ -232,7 +243,6 @@ var _plI18n = {
                             <input type="checkbox" id="plSelectAll"
                                    title="<fmt:message key='permalinkgenerator.audit.selectAll'/>"/>
                         </th>
-                        <th><fmt:message key="permalinkgenerator.audit.col.title"/></th>
                         <th><fmt:message key="permalinkgenerator.audit.col.path"/></th>
                         <%-- Language columns injected by JS --%>
                     </tr>
@@ -300,7 +310,7 @@ var _plI18n = {
                 e.stopPropagation();
                 var lang = cb.dataset.lang;
                 missingRows.forEach(function (row) {
-                    if (!row.missing.has(lang) || row.generated.has(lang)) return;
+                    if (row.isHomePage || !row.missing.has(lang) || row.generated.has(lang)) return;
                     if (cb.checked) selectCell(row.uuid, lang);
                     else            deselectCell(row.uuid, lang);
                 });
@@ -349,7 +359,7 @@ var _plI18n = {
         var escapedPath = scanPath.replace(/'/g, "''");
         var GQL_QUERY = 'query($q:String!,$lim:Int!,$off:Int!){jcr{' +
             'nodesByQuery(query:$q,queryLanguage:SQL2,limit:$lim,offset:$off){' +
-            'nodes{uuid path displayName vanityUrls{url language active default}}}}}';
+            'nodes{uuid path displayName isHomePage:property(name:"j:isHomePage"){value} vanityUrls{url language active default}}}}}';
         var qPage = "SELECT * FROM [jnt:page] AS n WHERE ISDESCENDANTNODE(n, '" + escapedPath + "')";
         var qMixin = "SELECT * FROM [jmix:mainResource] AS n WHERE ISDESCENDANTNODE(n, '" + escapedPath + "')";
 
@@ -387,10 +397,13 @@ var _plI18n = {
                         return !hasActiveDefault(n.vanityUrls, l);
                     }));
                     if (missing.size === 0) return;
+                    var nodeName = n.path.split('/').pop();
                     missingRows.push({
                         uuid: n.uuid,
                         path: n.path,
-                        displayName: n.displayName || n.path.split('/').pop(),
+                        displayName: n.displayName || nodeName,
+                        hasNoTitle: (n.displayName === nodeName),
+                        isHomePage: !!(n.isHomePage && n.isHomePage.value === 'true'),
                         missing: missing,
                         generated: new Set()
                     });
@@ -427,28 +440,27 @@ var _plI18n = {
     function appendRow(row) {
         var tr = document.createElement('tr');
         tr.id = 'pl-row-' + row.uuid;
-        tr.className = 'pl-audit-row';
+        tr.className = 'pl-audit-row' + (row.isHomePage ? ' pl-row-ignored' : '');
 
         // Checkbox
         var tdCb = document.createElement('td');
         var cb = document.createElement('input');
         cb.type = 'checkbox'; cb.className = 'pl-row-cb'; cb.dataset.uuid = row.uuid;
-        cb.addEventListener('change', function () {
-            if (cb.checked) {
-                row.missing.forEach(function (l) { if (!row.generated.has(l)) selectCell(row.uuid, l); });
-            } else {
-                langs.forEach(function (l) { deselectCell(row.uuid, l); });
-            }
-            refreshRowCells(row);
-            updateUI();
-        });
+        if (row.isHomePage) {
+            cb.disabled = true;
+            cb.title = 'Homepage — skipped';
+        } else {
+            cb.addEventListener('change', function () {
+                if (cb.checked) {
+                    row.missing.forEach(function (l) { if (!row.generated.has(l)) selectCell(row.uuid, l); });
+                } else {
+                    langs.forEach(function (l) { deselectCell(row.uuid, l); });
+                }
+                refreshRowCells(row);
+                updateUI();
+            });
+        }
         tdCb.appendChild(cb); tr.appendChild(tdCb);
-
-        // Title
-        var tdTitle = document.createElement('td');
-        tdTitle.style.cssText = 'max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-        tdTitle.title = row.displayName; tdTitle.textContent = row.displayName;
-        tr.appendChild(tdTitle);
 
         // Path
         var tdPath = document.createElement('td');
@@ -483,15 +495,18 @@ var _plI18n = {
             pill.className += isSel ? ' pl-pill-sel' : ' pl-pill-miss';
             pill.textContent = lang;
             pill.title = isSel ? i18n.pillSelected : i18n.pillMissing;
-            (function (r, l, p, td) {
-                p.addEventListener('click', function () {
-                    if (selections[r.uuid] && selections[r.uuid].has(l)) deselectCell(r.uuid, l);
-                    else selectCell(r.uuid, l);
-                    renderCell(td, r, l);
-                    updateUI();
-                });
-            }(row, lang, pill, td));
+            if (!row.isHomePage) {
+                (function (r, l, p, td) {
+                    p.addEventListener('click', function () {
+                        if (selections[r.uuid] && selections[r.uuid].has(l)) deselectCell(r.uuid, l);
+                        else selectCell(r.uuid, l);
+                        renderCell(td, r, l);
+                        updateUI();
+                    });
+                }(row, lang, pill, td));
+            }
         }
+        if (row.hasNoTitle) { pill.classList.add('pl-notitle'); pill.title += ' — ' + i18n.pillNoTitle; }
         td.appendChild(pill);
     }
 
@@ -542,6 +557,7 @@ var _plI18n = {
 
         // Sync select-all
         var allMissing = missingRows.reduce(function (acc, row) {
+            if (row.isHomePage) return acc;
             Array.from(row.missing).forEach(function (l) { if (!row.generated.has(l)) acc.push({ uuid: row.uuid, l: l }); });
             return acc;
         }, []);
@@ -654,6 +670,7 @@ var _plI18n = {
     elSelectAll.addEventListener('change', function () {
         if (elSelectAll.checked) {
             missingRows.forEach(function (row) {
+                if (row.isHomePage) return;
                 row.missing.forEach(function (l) { if (!row.generated.has(l)) selectCell(row.uuid, l); });
             });
         } else {
@@ -664,6 +681,475 @@ var _plI18n = {
     });
 
     // Inject language columns
+    buildLangHeaders();
+}());
+</script>
+
+<%-- ═══════════════════════════════════════════════════════════════════════
+     FORCE REGENERATION SECTION
+     ═══════════════════════════════════════════════════════════════════════ --%>
+
+<div class="pl-regen">
+    <h3><fmt:message key="permalinkgenerator.regen.title"/></h3>
+    <p class="text-muted"><fmt:message key="permalinkgenerator.regen.description"/></p>
+
+    <div class="control-group">
+        <div class="controls" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <button class="btn" id="plRBtnScan">
+                <i class="icon-search"></i> <fmt:message key="permalinkgenerator.regen.scan"/>
+            </button>
+            <label style="margin:0;font-weight:normal;font-size:13px;">
+                <input type="checkbox" id="plRBypass" style="margin-right:4px;"/>
+                <fmt:message key="permalinkgenerator.regen.bypassExcluded"/>
+            </label>
+            <span id="plRScanStatus" style="font-size:12px;color:#666;"></span>
+        </div>
+    </div>
+
+    <div id="plRResults" style="display:none;margin-top:16px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+            <span id="plRSummary" style="font-size:13px;font-weight:bold;"></span>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                <button class="btn btn-warning" id="plRBtnGenerate" disabled>
+                    <i class="icon-cog icon-white"></i>
+                    <fmt:message key="permalinkgenerator.regen.generate"/>
+                    (<span id="plRSelCount">0</span>)
+                </button>
+                <span id="plRGenStatus" style="font-size:12px;"></span>
+            </div>
+        </div>
+        <div class="pl-progress-wrap" id="plRProgressWrap" style="display:none;">
+            <div class="pl-progress-bar" id="plRProgressBar"></div>
+        </div>
+        <div style="overflow-x:auto;">
+            <table class="pl-audit-table" id="plRTable">
+                <thead>
+                    <tr id="plRThead">
+                        <th style="width:28px;">
+                            <input type="checkbox" id="plRSelectAll"
+                                   title="<fmt:message key='permalinkgenerator.audit.selectAll'/>"/>
+                        </th>
+                        <th><fmt:message key="permalinkgenerator.audit.col.path"/></th>
+                        <%-- Language columns injected by JS --%>
+                    </tr>
+                </thead>
+                <tbody id="plRTbody"></tbody>
+            </table>
+        </div>
+        <div id="plRLoadMoreWrap" style="text-align:center;margin-top:12px;display:none;">
+            <button class="btn" id="plRBtnLoadMore">
+                <fmt:message key="permalinkgenerator.audit.loadMore"/>
+            </button>
+            <span id="plRLoadMoreStatus" style="font-size:12px;color:#777;margin-left:8px;"></span>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var langs         = _plSiteLangs;
+    var excludedPaths = _plExcludedPaths;
+    var i18n          = _plI18n;
+    var contextPath   = '${pageContext.request.contextPath}';
+    var sitePath      = '${fn:escapeXml(site.path)}';
+    var actionUrl     = window.location.pathname.replace(/\.[^/]+\.html$/, '') + '.generatePermalinks.do';
+    var BATCH         = 100;
+
+    function isExcludedBySettings(nodePath) {
+        return excludedPaths.some(function (ep) { return ep && nodePath.startsWith(ep); });
+    }
+
+    var offset    = 0;
+    var totalScanned = 0;
+    var regenRows = [];
+    var selections = {};
+    var scanning  = false;
+
+    var elResults   = document.getElementById('plRResults');
+    var elSummary   = document.getElementById('plRSummary');
+    var elTbody     = document.getElementById('plRTbody');
+    var elSelCount  = document.getElementById('plRSelCount');
+    var elBtnGen    = document.getElementById('plRBtnGenerate');
+    var elGenSt     = document.getElementById('plRGenStatus');
+    var elLoadWrap  = document.getElementById('plRLoadMoreWrap');
+    var elLoadSt    = document.getElementById('plRLoadMoreStatus');
+    var elScanSt    = document.getElementById('plRScanStatus');
+    var elProgBar   = document.getElementById('plRProgressBar');
+    var elProgWrap  = document.getElementById('plRProgressWrap');
+    var elSelectAll = document.getElementById('plRSelectAll');
+    var elBypass    = document.getElementById('plRBypass');
+
+    function buildLangHeaders() {
+        var thead = document.getElementById('plRThead');
+        langs.forEach(function (lang) {
+            var th = document.createElement('th');
+            th.className = 'pl-lang-th';
+            th.title = i18n.colLangTitle.replace('{0}', lang.toUpperCase());
+            th.dataset.lang = lang;
+            th.innerHTML = lang.toUpperCase() + '<br/><input type="checkbox" class="plR-col-cb" data-lang="' + lang + '" style="margin:2px 0 0 0;" />';
+            thead.appendChild(th);
+        });
+        document.querySelectorAll('.plR-col-cb').forEach(function (cb) {
+            cb.addEventListener('change', function (e) {
+                e.stopPropagation();
+                var lang = cb.dataset.lang;
+                regenRows.forEach(function (row) {
+                    if (row.isHomePage || row.generated.has(lang)) return;
+                    if (cb.checked) selectCell(row.uuid, lang);
+                    else            deselectCell(row.uuid, lang);
+                });
+                refreshAllCells();
+                updateUI();
+            });
+        });
+    }
+
+    function gql(body) {
+        return fetch(contextPath + '/modules/graphql', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'include',
+            body: JSON.stringify(body)
+        }).then(function (r) { return r.json(); });
+    }
+
+    function hasActiveDefault(vanityUrls, lang) {
+        return (vanityUrls || []).some(function (v) {
+            return v.language === lang && v.active && v['default'];
+        });
+    }
+
+    function doScan(reset) {
+        if (scanning) return;
+        if (reset) {
+            offset = 0; totalScanned = 0; regenRows = []; selections = {};
+            elTbody.innerHTML = '';
+            elResults.style.display = 'none';
+        }
+
+        scanning = true;
+        document.getElementById('plRBtnScan').disabled = true;
+        elScanSt.style.color = '#666';
+        elScanSt.textContent = i18n.scanRunning;
+
+        var escapedPath = sitePath.replace(/'/g, "''");
+        var GQL_QUERY = 'query($q:String!,$lim:Int!,$off:Int!){jcr{' +
+            'nodesByQuery(query:$q,queryLanguage:SQL2,limit:$lim,offset:$off){' +
+            'nodes{uuid path displayName isHomePage:property(name:"j:isHomePage"){value} vanityUrls{url language active default}}}}}';
+        var qPage  = "SELECT * FROM [jnt:page] AS n WHERE ISDESCENDANTNODE(n, '" + escapedPath + "')";
+        var qMixin = "SELECT * FROM [jmix:mainResource] AS n WHERE ISDESCENDANTNODE(n, '" + escapedPath + "')";
+
+        Promise.all([
+            gql({ query: GQL_QUERY, variables: { q: qPage,  lim: BATCH, off: offset } }),
+            gql({ query: GQL_QUERY, variables: { q: qMixin, lim: BATCH, off: offset } })
+        ]).then(function (results) {
+                var nodes = [];
+                var seen = {};
+                var errors = [];
+                results.forEach(function (data) {
+                    var errs = (data.errors || []).map(function(e){ return e.message; });
+                    if (errs.length) { errors = errors.concat(errs); return; }
+                    var batch = [];
+                    try { batch = data.data.jcr.nodesByQuery.nodes || []; } catch (e) {}
+                    batch.forEach(function (n) {
+                        if (!seen[n.uuid]) { seen[n.uuid] = true; nodes.push(n); }
+                    });
+                });
+                if (errors.length && nodes.length === 0) {
+                    elScanSt.style.color = '#c0392b';
+                    elScanSt.textContent = i18n.errorGraphql.replace('{0}', errors.join('; '));
+                    return;
+                }
+                var hasMore = results.some(function(data) {
+                    try { return (data.data.jcr.nodesByQuery.nodes || []).length === BATCH; } catch(e) { return false; }
+                });
+
+                totalScanned += nodes.length;
+                offset += BATCH;
+
+                var bypass = elBypass.checked;
+                nodes.forEach(function (n) {
+                    if (!bypass && isExcludedBySettings(n.path)) return;
+                    var missingLangs = new Set(langs.filter(function (l) { return !hasActiveDefault(n.vanityUrls, l); }));
+                    if (missingLangs.size === 0) return;
+                    var nodeName = n.path.split('/').pop();
+                    regenRows.push({
+                        uuid: n.uuid,
+                        path: n.path,
+                        displayName: n.displayName || nodeName,
+                        hasNoTitle: (n.displayName === nodeName),
+                        isHomePage: !!(n.isHomePage && n.isHomePage.value === 'true'),
+                        missingLangs: missingLangs,
+                        generated: new Set()
+                    });
+                    appendRow(regenRows[regenRows.length - 1]);
+                });
+
+                elLoadWrap.style.display = hasMore ? 'block' : 'none';
+                elLoadSt.textContent = hasMore
+                    ? i18n.loadMoreSt.replace('{0}', offset).replace('{1}', regenRows.length)
+                    : '';
+
+                elScanSt.style.color = '#333';
+                elScanSt.textContent = i18n.scanned.replace('{0}', totalScanned).replace('{1}', regenRows.length);
+                elResults.style.display = 'block';
+                updateSummary();
+                updateUI();
+            })
+            .catch(function (e) {
+                elScanSt.style.color = '#c0392b';
+                elScanSt.textContent = i18n.errorNetwork.replace('{0}', e.message || '?');
+            })
+            .finally(function () {
+                scanning = false;
+                document.getElementById('plRBtnScan').disabled = false;
+            });
+    }
+
+    function appendRow(row) {
+        var tr = document.createElement('tr');
+        tr.id = 'plR-row-' + row.uuid;
+        tr.className = 'pl-audit-row' + (row.isHomePage ? ' pl-row-ignored' : '');
+
+        var tdCb = document.createElement('td');
+        var cb = document.createElement('input');
+        cb.type = 'checkbox'; cb.className = 'plR-row-cb'; cb.dataset.uuid = row.uuid;
+        if (row.isHomePage) {
+            cb.disabled = true;
+            cb.title = 'Homepage — skipped';
+        } else {
+            cb.addEventListener('change', function () {
+                if (cb.checked) {
+                    langs.forEach(function (l) { if (!row.generated.has(l)) selectCell(row.uuid, l); });
+                } else {
+                    langs.forEach(function (l) { deselectCell(row.uuid, l); });
+                }
+                refreshRowCells(row);
+                updateUI();
+            });
+        }
+        tdCb.appendChild(cb); tr.appendChild(tdCb);
+
+        var tdPath = document.createElement('td');
+        tdPath.style.cssText = 'font-family:monospace;font-size:11px;color:#666;max-width:380px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+        tdPath.title = row.path; tdPath.textContent = row.path;
+        tr.appendChild(tdPath);
+
+        langs.forEach(function (lang) {
+            var td = document.createElement('td');
+            td.style.textAlign = 'center';
+            td.dataset.uuid = row.uuid; td.dataset.lang = lang;
+            renderCell(td, row, lang);
+            tr.appendChild(td);
+        });
+
+        elTbody.appendChild(tr);
+    }
+
+    function renderCell(td, row, lang) {
+        td.innerHTML = '';
+        var pill = document.createElement('span');
+        pill.className = 'pl-pill';
+
+        if (row.generated.has(lang)) {
+            pill.classList.add('pl-pill-gen');
+            pill.textContent = lang;
+            pill.title = i18n.pillGenerated;
+        } else {
+            var isSel = !!(selections[row.uuid] && selections[row.uuid].has(lang));
+            if (isSel) {
+                pill.classList.add('pl-pill-sel');
+                pill.textContent = lang;
+                pill.title = i18n.pillSelForce;
+            } else if (row.missingLangs.has(lang)) {
+                pill.classList.add('pl-pill-miss');
+                pill.textContent = lang;
+                pill.title = i18n.pillMissing;
+            } else {
+                pill.classList.add('pl-pill-has');
+                pill.textContent = lang;
+                pill.title = i18n.pillHasForce;
+            }
+            if (!row.isHomePage) {
+                pill.style.cursor = 'pointer';
+                (function (r, l, p, td) {
+                    p.addEventListener('click', function () {
+                        if (selections[r.uuid] && selections[r.uuid].has(l)) deselectCell(r.uuid, l);
+                        else selectCell(r.uuid, l);
+                        renderCell(td, r, l);
+                        updateUI();
+                    });
+                }(row, lang, pill, td));
+            }
+        }
+
+        if (row.hasNoTitle) { pill.classList.add('pl-notitle'); pill.title += ' — ' + i18n.pillNoTitle; }
+        td.appendChild(pill);
+    }
+
+    function refreshRowCells(row) {
+        langs.forEach(function (lang) {
+            var td = document.querySelector('#plR-row-' + row.uuid + ' td[data-lang="' + lang + '"]');
+            if (td) renderCell(td, row, lang);
+        });
+        syncRowCheckbox(row);
+        var allDone = langs.every(function (l) { return row.generated.has(l); });
+        var tr = document.getElementById('plR-row-' + row.uuid);
+        if (tr) tr.classList.toggle('pl-row-done', allDone);
+    }
+
+    function refreshAllCells() {
+        regenRows.forEach(function (row) { refreshRowCells(row); });
+    }
+
+    function syncRowCheckbox(row) {
+        var cb = document.querySelector('#plR-row-' + row.uuid + ' .plR-row-cb');
+        if (!cb) return;
+        var active = langs.filter(function (l) { return !row.generated.has(l); });
+        cb.checked = active.length > 0 && active.every(function (l) {
+            return selections[row.uuid] && selections[row.uuid].has(l);
+        });
+    }
+
+    function selectCell(uuid, lang) {
+        if (!selections[uuid]) selections[uuid] = new Set();
+        selections[uuid].add(lang);
+    }
+    function deselectCell(uuid, lang) {
+        if (selections[uuid]) { selections[uuid].delete(lang); if (selections[uuid].size === 0) delete selections[uuid]; }
+    }
+    function totalSelected() {
+        var n = 0; Object.keys(selections).forEach(function (uid) { n += selections[uid].size; }); return n;
+    }
+
+    function updateSummary() {
+        elSummary.textContent = i18n.regenSummary.replace('{0}', regenRows.length);
+    }
+
+    function updateUI() {
+        var n = totalSelected();
+        elSelCount.textContent = n;
+        elBtnGen.disabled = (n === 0);
+
+        var allActive = [];
+        regenRows.forEach(function (row) {
+            if (row.isHomePage) return;
+            langs.forEach(function (l) { if (!row.generated.has(l)) allActive.push({ uuid: row.uuid, l: l }); });
+        });
+        elSelectAll.checked = allActive.length > 0 && allActive.every(function (item) {
+            return selections[item.uuid] && selections[item.uuid].has(item.l);
+        });
+
+        document.querySelectorAll('.plR-col-cb').forEach(function (cb) {
+            var lang = cb.dataset.lang;
+            var colActive = regenRows.filter(function (row) { return !row.generated.has(lang); });
+            cb.checked = colActive.length > 0 && colActive.every(function (row) {
+                return selections[row.uuid] && selections[row.uuid].has(lang);
+            });
+        });
+    }
+
+    function doGenerate() {
+        var byLang = {};
+        Object.keys(selections).forEach(function (uuid) {
+            selections[uuid].forEach(function (lang) {
+                if (!byLang[lang]) byLang[lang] = [];
+                byLang[lang].push(uuid);
+            });
+        });
+        var langKeys = Object.keys(byLang);
+        if (langKeys.length === 0) return;
+
+        var total = totalSelected();
+        var done  = 0;
+        elBtnGen.disabled = true;
+        elGenSt.style.color = '#666';
+        elGenSt.textContent = '';
+        elProgWrap.style.display = 'block';
+        elProgBar.style.transform = 'scaleX(0)';
+
+        function runLang(li) {
+            if (li >= langKeys.length) {
+                elProgWrap.style.display = 'none';
+                if (done > 0) {
+                    elGenSt.style.color = '#27ae60';
+                    elGenSt.textContent = i18n.regenSuccess.replace('{0}', done);
+                } else if (elGenSt.style.color !== 'rgb(192, 57, 43)') {
+                    elGenSt.style.color = '#e67e22';
+                    elGenSt.textContent = i18n.regenZero;
+                }
+                elBtnGen.disabled = (totalSelected() === 0);
+                return;
+            }
+            var lang  = langKeys[li];
+            var uuids = byLang[lang];
+            var CHUNK = 20;
+            var chunks = [];
+            for (var c = 0; c < uuids.length; c += CHUNK) chunks.push(uuids.slice(c, c + CHUNK));
+
+            function runChunk(ci) {
+                if (ci >= chunks.length) { runLang(li + 1); return; }
+
+                chunks[ci].forEach(function (uuid) {
+                    var td = document.querySelector('#plR-row-' + uuid + ' td[data-lang="' + lang + '"]');
+                    if (td) { td.innerHTML = '<span class="pl-pill pl-pill-spin">' + lang + '</span>'; }
+                });
+
+                var params = new URLSearchParams();
+                chunks[ci].forEach(function (uid) { params.append('nodeIds[]', uid); });
+                params.append('languages[]', lang);
+                params.append('force', 'true');
+
+                $.ajax({
+                    url: actionUrl,
+                    method: 'POST',
+                    contentType: 'application/x-www-form-urlencoded',
+                    data: params.toString(),
+                    success: function () {
+                        chunks[ci].forEach(function (uuid) {
+                            var row = regenRows.find(function (r) { return r.uuid === uuid; });
+                            if (!row) return;
+                            row.generated.add(lang);
+                            deselectCell(uuid, lang);
+                            done++;
+                            elProgBar.style.transform = 'scaleX(' + Math.min(1, done / total) + ')';
+                            refreshRowCells(row);
+                        });
+                        updateUI();
+                    },
+                    error: function (xhr) {
+                        elGenSt.style.color = '#c0392b';
+                        elGenSt.textContent = i18n.regenError.replace('{0}', xhr.status).replace('{1}', lang);
+                        chunks[ci].forEach(function (uuid) {
+                            var row = regenRows.find(function (r) { return r.uuid === uuid; });
+                            if (row) { var td = document.querySelector('#plR-row-' + uuid + ' td[data-lang="' + lang + '"]'); if (td) renderCell(td, row, lang); }
+                        });
+                    },
+                    complete: function () { runChunk(ci + 1); }
+                });
+            }
+            runChunk(0);
+        }
+        runLang(0);
+    }
+
+    document.getElementById('plRBtnScan').addEventListener('click', function () { doScan(true); });
+    document.getElementById('plRBtnLoadMore').addEventListener('click', function () { doScan(false); });
+    elBtnGen.addEventListener('click', doGenerate);
+
+    elSelectAll.addEventListener('change', function () {
+        if (elSelectAll.checked) {
+            regenRows.forEach(function (row) {
+                if (row.isHomePage) return;
+                langs.forEach(function (l) { if (!row.generated.has(l)) selectCell(row.uuid, l); });
+            });
+        } else {
+            selections = {};
+        }
+        refreshAllCells();
+        updateUI();
+    });
+
     buildLangHeaders();
 }());
 </script>

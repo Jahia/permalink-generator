@@ -29,16 +29,18 @@ public class GeneratePermalinksAction extends Action {
                                   Map<String, List<String>> parameters, URLResolver urlResolver) throws Exception {
         List<String> nodeIds = parameters.get("nodeIds[]");
         List<String> languages = parameters.get("languages[]");
+        List<String> forceParam = parameters.get("force");
+        boolean force = forceParam != null && !forceParam.isEmpty() && "true".equals(forceParam.get(0));
 
-        logger.info("GeneratePermalinksAction: nodeIds={} languages={}", nodeIds, languages);
+        logger.info("GeneratePermalinksAction: nodeIds={} languages={} force={}", nodeIds, languages, force);
 
         if (nodeIds == null || nodeIds.isEmpty() || languages == null || languages.isEmpty()) {
             logger.warn("GeneratePermalinksAction: missing params — nodeIds={} languages={}", nodeIds, languages);
             return new ActionResult(HttpServletResponse.SC_BAD_REQUEST);
         }
 
-        int count = permalinkGeneratorService.generateVanityForNodeIds(nodeIds, languages, session);
-        logger.info("GeneratePermalinksAction: {} permalink(s) created", count);
+        int count = permalinkGeneratorService.generateVanityForNodeIds(nodeIds, languages, session, force);
+        logger.info("GeneratePermalinksAction: {} permalink(s) created (force={})", count, force);
         return new ActionResult(HttpServletResponse.SC_OK);
     }
 }

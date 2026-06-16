@@ -51,18 +51,20 @@ On move, the slug of each page is preserved — only the prefix changes. Descend
 - [slugify](https://github.com/slugify/slugify) 2.4
 - Jahia `seo` module
 
-## Site settings & audit panel
+## Site settings & admin panel
 
 An administration panel is available under **Site Settings → Permalink Generator**:
 
-- **Mode** — `SMART` (default): respects manually-created vanities and never overwrites them. `FORCE`: regenerates all auto-managed vanities even if a manual one exists.
+- **Mode** — `SMART` (default): respects manually-created vanities and never overwrites them. `FORCE`: always applies module rules even over manual vanities.
 - **Excluded paths** — JCR paths (one per line) for which no vanity will ever be created or updated.
-- **Audit** — scans all `jnt:page` and `jmix:mainResource` nodes under a given path, lists nodes with missing vanities per language, and lets you generate the missing ones in bulk.
+- **Missing Permalink Audit** — scans all `jnt:page` and `jmix:mainResource` nodes under a given path, lists nodes with missing vanities per language, and lets you generate them in bulk. Language pills appear in italic when a node has no `jcr:title` (node name used as slug). Home page nodes are shown but greyed out (backend skips them).
+- **Force Regeneration** — scans all nodes from the site root and force-regenerates vanity URLs using the computed pattern, overwriting manual vanities. Scope is nodes with at least one missing vanity. A "bypass excluded paths" checkbox includes otherwise-excluded nodes. Uses the same table UI as the audit panel.
 
 ## Technical notes
 
 - `PermalinkGeneratorService` is a Spring bean with `@Autowired VanityUrlManager`, registered as a Drools global via `ModuleGlobalObject`
-- `GeneratePermalinksAction` — Jahia action (`POST *.generatePermalinks.do`) used by the audit panel to bulk-create missing vanities; accepts `nodeIds[]` and `languages[]` POST parameters
+- `GeneratePermalinksAction` — Jahia action (`POST *.generatePermalinks.do`) used by both the audit and force-regen panels; accepts `nodeIds[]`, `languages[]`, and `force` (boolean) POST parameters
+- When `force=true`, the service bypasses the SMART-mode manual-vanity guard and the "already correct" idempotency check, always writing the newly computed URL
 - `jmix:permalinkGenerated` mixin defined in `META-INF/definitions.cnd`
 - Rules in `META-INF/rules.drl` / `META-INF/rules.dsl`
-- Audit panel uses two parallel GraphQL queries (`jnt:page` + `jmix:mainResource`) deduped by UUID, matching sitemap content types
+- Admin panels use two parallel GraphQL queries (`jnt:page` + `jmix:mainResource`) deduped by UUID, augmented with `j:isHomePage` property and `vanityUrls` to drive client-side filtering
