@@ -41,7 +41,9 @@ public class GeneratePermalinksAction extends Action {
         boolean preview = previewParam != null && !previewParam.isEmpty() && "true".equals(previewParam.get(0));
 
         if (preview) {
-            List<Map<String, String>> results = permalinkGeneratorService.previewVanityForNodeIds(nodeIds, languages, session);
+            List<String> bypassParam = parameters.get("bypassExcluded");
+            boolean bypassExcluded = bypassParam != null && !bypassParam.isEmpty() && "true".equals(bypassParam.get(0));
+            List<Map<String, String>> results = permalinkGeneratorService.previewVanityForNodeIds(nodeIds, languages, session, bypassExcluded);
             JSONArray arr = new JSONArray();
             for (Map<String, String> r : results) {
                 JSONObject obj = new JSONObject();

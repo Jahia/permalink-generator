@@ -24,8 +24,11 @@ import javax.jcr.PathNotFoundException;
 import javax.jcr.RepositoryException;
 import javax.jcr.Value;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * Creates and maintains permanent vanity URLs for pages and displayable content (jmix:renderableMainResource).
@@ -618,30 +621,72 @@ public class PermalinkGeneratorService {
      */
     /**
      * Preview mode: compute what would happen per node×language without making any changes.
-     * Returns entries with willChange=true only when the computed URL differs from the current active+default.
+     *
+     * Optimised for large sites:
+     *  - Nodes sorted by path depth so parents are always evaluated before their children.
+     *  - One JCR session opened per language (not per node×language).
+     *  - computedUrlCache lets each child reuse its parent's freshly-computed URL (cascade),
+     *    giving the correct final state when the entire selected subtree is regenerated.
+     *  - currentVanityCache loads all active+default vanities for a node in one pass,
+     *    shared across all language iterations (no repeated JCR child-node scans).
+     *
+     * @param bypassExcluded when true, skips the isExcludedPath check (mirrors the bypass checkbox)
      */
-    public List<java.util.Map<String, String>> previewVanityForNodeIds(List<String> nodeIds, List<String> languages, JCRSessionWrapper session) {
-        List<java.util.Map<String, String>> results = new ArrayList<>();
-        for (String nodeId : nodeIds) {
-            for (String language : languages) {
+    public List<Map<String, String>> previewVanityForNodeIds(
+            List<String> nodeIds, List<String> languages,
+            JCRSessionWrapper session, boolean bypassExcluded) {
+
+        List<Map<String, String>> results = new ArrayList<>();
+        if (nodeIds.isEmpty() || languages.isEmpty()) return results;
+
+        // Sort shallow-first so parents are in the cache before children are evaluated
+        List<String> sortedIds = sortNodeIdsByDepth(nodeIds, session);
+
+        // nodeId → lang → new computed URL (built as we process; children reuse parent's value)
+        Map<String, Map<String, String>> computedCache = new HashMap<>();
+        // nodeId → lang → current active+default URL (loaded once per node, all langs)
+        Map<String, Map<String, String>> currentVanityCache = new HashMap<>();
+
+        for (String language : languages) {
+            JCRSessionWrapper langSession;
+            try {
+                langSession = JCRSessionFactory.getInstance()
+                        .getCurrentSystemSession(Constants.EDIT_WORKSPACE, new Locale(language), null);
+            } catch (RepositoryException e) {
+                logger.warn("Could not open session for language {}: {}", language, e.getMessage()); continue;
+            }
+            JCRSiteNode site = null;
+            String defaultLang = null;
+
+            for (String nodeId : sortedIds) {
                 try {
-                    JCRSessionWrapper langSession = JCRSessionFactory.getInstance()
-                            .getCurrentSystemSession(Constants.EDIT_WORKSPACE, new Locale(language), null);
                     JCRNodeWrapper node = langSession.getNodeByIdentifier(nodeId);
-                    JCRSiteNode site = node.getResolveSite();
-                    if (site == null || !site.getInstalledModules().contains("permalink-generator")) continue;
+                    if (site == null) {
+                        site = node.getResolveSite();
+                        if (site == null || !site.getInstalledModules().contains("permalink-generator")) break;
+                        defaultLang = site.getDefaultLanguage();
+                    }
                     if (node.hasProperty("j:isHomePage") && node.getProperty("j:isHomePage").getBoolean()) continue;
                     if (node.isNodeType(MIXIN_PERMALINK_EXCLUDED)) continue;
-                    if (isExcludedPath(node, site)) continue;
-                    RenderContext context = new RenderContext(null, null, node.getSession().getUser());
-                    context.setSite(site);
-                    if (!JCRContentUtils.isADisplayableNode(node, context) || node.isNodeType("jnt:file")) continue;
+                    if (!bypassExcluded && isExcludedPath(node, site)) continue;
+                    RenderContext ctx = new RenderContext(null, null, node.getSession().getUser());
+                    ctx.setSite(site);
+                    if (!JCRContentUtils.isADisplayableNode(node, ctx) || node.isNodeType("jnt:file")) continue;
 
-                    String computedUrl = computeVanityUrl(node, language, site.getDefaultLanguage());
-                    String currentUrl  = getActiveDefaultVanityUrl(node, language);
+                    String computedUrl = computeVanityUrlCascade(node, language, defaultLang, computedCache, currentVanityCache);
+
+                    // Cache for children of this node in subsequent iterations
+                    if (computedUrl != null) {
+                        computedCache.computeIfAbsent(nodeId, k -> new HashMap<>()).put(language, computedUrl);
+                    }
+
+                    // Load node's own vanities once (all langs), shared across language passes
+                    Map<String, String> nodeVanities = currentVanityCache.computeIfAbsent(nodeId,
+                            k -> loadCurrentVanitiesForNode(node));
+                    String currentUrl = nodeVanities.get(language);
                     boolean willChange = computedUrl != null && !computedUrl.equals(currentUrl);
 
-                    java.util.Map<String, String> entry = new java.util.HashMap<>();
+                    Map<String, String> entry = new HashMap<>();
                     entry.put("uuid",        nodeId);
                     entry.put("path",        node.getPath());
                     entry.put("language",    language);
@@ -657,17 +702,37 @@ public class PermalinkGeneratorService {
         return results;
     }
 
-    public List<java.util.Map<String, String>> generateVanityForNodeIds(List<String> nodeIds, List<String> languages, JCRSessionWrapper session) {
+    public List<Map<String, String>> generateVanityForNodeIds(List<String> nodeIds, List<String> languages, JCRSessionWrapper session) {
         return generateVanityForNodeIds(nodeIds, languages, session, false);
     }
 
-    public List<java.util.Map<String, String>> generateVanityForNodeIds(List<String> nodeIds, List<String> languages, JCRSessionWrapper session, boolean forceRegen) {
-        List<java.util.Map<String, String>> results = new ArrayList<>();
-        for (String nodeId : nodeIds) {
-            for (String language : languages) {
+    /**
+     * Generate (or force-regenerate) vanity URLs for the given nodes.
+     *
+     * Nodes are processed shallowest-first so that a parent's new vanity is committed to JCR
+     * before its children are evaluated — the child's computeVanityUrl reads the parent's
+     * updated URL automatically from the same shared session.
+     */
+    public List<Map<String, String>> generateVanityForNodeIds(
+            List<String> nodeIds, List<String> languages,
+            JCRSessionWrapper session, boolean forceRegen) {
+
+        List<Map<String, String>> results = new ArrayList<>();
+        if (nodeIds.isEmpty() || languages.isEmpty()) return results;
+
+        // Depth-sort: parents before children → child reads parent's freshly-saved URL
+        List<String> sortedIds = sortNodeIdsByDepth(nodeIds, session);
+
+        for (String language : languages) {
+            JCRSessionWrapper langSession;
+            try {
+                langSession = JCRSessionFactory.getInstance()
+                        .getCurrentSystemSession(Constants.EDIT_WORKSPACE, new Locale(language), null);
+            } catch (RepositoryException e) {
+                logger.warn("Could not open session for language {}: {}", language, e.getMessage()); continue;
+            }
+            for (String nodeId : sortedIds) {
                 try {
-                    JCRSessionWrapper langSession = JCRSessionFactory.getInstance()
-                            .getCurrentSystemSession(Constants.EDIT_WORKSPACE, new Locale(language), null);
                     JCRNodeWrapper node = langSession.getNodeByIdentifier(nodeId);
                     JCRSiteNode site = node.getResolveSite();
                     if (site == null || !site.getInstalledModules().contains("permalink-generator")) {
@@ -679,7 +744,7 @@ public class PermalinkGeneratorService {
                         logger.info("[permalink-admin] {} [{}]: {} → {}{}",
                                 node.getPath(), language, op.action, op.url,
                                 (op.oldUrl != null) ? " (was: " + op.oldUrl + ")" : "");
-                        java.util.Map<String, String> entry = new java.util.HashMap<>();
+                        Map<String, String> entry = new HashMap<>();
                         entry.put("uuid", nodeId);
                         entry.put("path", node.getPath());
                         entry.put("language", language);
@@ -694,6 +759,108 @@ public class PermalinkGeneratorService {
             }
         }
         return results;
+    }
+
+    // -------------------------------------------------------------------------
+    // Bulk optimisation helpers
+    // -------------------------------------------------------------------------
+
+    /**
+     * Sort node UUIDs by JCR path depth (shallowest first).
+     * Uses path segment count from a neutral session — cheap, no per-locale overhead.
+     */
+    private List<String> sortNodeIdsByDepth(List<String> nodeIds, JCRSessionWrapper session) {
+        final Map<String, Integer> depthMap = new HashMap<>();
+        for (String nodeId : nodeIds) {
+            try {
+                int depth = session.getNodeByIdentifier(nodeId).getPath().split("/").length;
+                depthMap.put(nodeId, depth);
+            } catch (Exception e) {
+                depthMap.put(nodeId, 999);
+            }
+        }
+        List<String> sorted = new ArrayList<>(nodeIds);
+        sorted.sort(Comparator.comparingInt(depthMap::get));
+        return sorted;
+    }
+
+    /**
+     * Load all active+default vanity URLs for a node in a single child-node scan.
+     * Returns a lang→url map covering every language that has an active default vanity.
+     * Result is cached by callers so this scan runs at most once per node per bulk call.
+     */
+    private Map<String, String> loadCurrentVanitiesForNode(JCRNodeWrapper node) {
+        Map<String, String> result = new HashMap<>();
+        try {
+            if (!node.hasNode("vanityUrlMapping")) return result;
+            NodeIterator it = node.getNode("vanityUrlMapping").getNodes();
+            while (it.hasNext()) {
+                JCRNodeWrapper v = (JCRNodeWrapper) it.nextNode();
+                if (!v.hasProperty("jcr:language")) continue;
+                if (!v.hasProperty("j:active") || !v.getProperty("j:active").getBoolean()) continue;
+                if (!v.hasProperty("j:default") || !v.getProperty("j:default").getBoolean()) continue;
+                String lang = v.getProperty("jcr:language").getString();
+                if (v.hasProperty("j:url")) result.put(lang, v.getProperty("j:url").getString());
+            }
+        } catch (RepositoryException e) {
+            logger.debug("Could not load vanities for {}: {}", node.getPath(), e.getMessage());
+        }
+        return result;
+    }
+
+    /**
+     * Like computeVanityUrl but uses two caches to avoid redundant JCR reads:
+     *
+     *   computedCache    — parent's newly-computed URL from this same bulk call.
+     *                      Used when both parent and child are selected for regeneration
+     *                      (cascade: child URL reflects parent's new URL, not the old one).
+     *
+     *   currentVanityCache — parent's current active+default URL, loaded once per parent
+     *                        across all languages (shared Map<lang,url> per node).
+     *                        Falls back to this when parent is not (yet) in computedCache.
+     */
+    private String computeVanityUrlCascade(JCRNodeWrapper node, String language, String defaultLanguage,
+            Map<String, Map<String, String>> computedCache,
+            Map<String, Map<String, String>> currentVanityCache) throws RepositoryException {
+
+        String displayableName = node.getDisplayableName();
+        if (displayableName == null) return null;
+        String slug = SLUGIFY.slugify(displayableName);
+        if (slug.isEmpty()) return null;
+
+        List<JCRNodeWrapper> parents = JCRTagUtils.getParentsOfType(node, "jmix:navMenuItem");
+
+        if (!parents.isEmpty()) {
+            JCRNodeWrapper directParent = parents.get(0);
+            String parentId = directParent.getIdentifier();
+
+            // 1. Cascaded computed URL (parent already processed in this bulk call)
+            Map<String, String> parentComputed = computedCache.get(parentId);
+            if (parentComputed != null) {
+                String parentUrl = parentComputed.get(language);
+                if (parentUrl != null) return parentUrl + "/" + slug;
+            }
+
+            // 2. Cached current URL (load all langs once per parent, reused across languages)
+            Map<String, String> parentCurrent = currentVanityCache.computeIfAbsent(parentId,
+                    k -> loadCurrentVanitiesForNode(directParent));
+            String parentUrl = parentCurrent.get(language);
+            if (parentUrl != null) return parentUrl + "/" + slug;
+        }
+
+        // Fallback: rebuild full path from ancestor titles (same logic as computeVanityUrl)
+        String url = "/" + slug;
+        for (JCRNodeWrapper parent : parents) {
+            if (!parent.hasProperty("j:isHomePage")) {
+                String parentName = parent.getDisplayableName();
+                if (parentName != null) {
+                    String parentSlug = SLUGIFY.slugify(parentName);
+                    if (!parentSlug.isEmpty()) url = "/" + parentSlug + url;
+                }
+            }
+        }
+        if (!language.equals(defaultLanguage)) url = "/" + language + url;
+        return url;
     }
 
     private JCRNodeWrapper resolveNode(String path, JCRSessionWrapper session) {

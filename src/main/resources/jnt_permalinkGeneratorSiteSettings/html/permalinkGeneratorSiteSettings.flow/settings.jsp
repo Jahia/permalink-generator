@@ -872,15 +872,23 @@ var _plI18n = {
 
         function finalizeRows(nodes, previewMap) {
             var bypass = elBypass.checked;
+            // previewMap === false → preview call failed; show all nodes (conservative fallback)
+            var previewFailed = (previewMap === false);
             nodes.forEach(function (n) {
                 if (!bypass && isExcludedBySettings(n.path)) return;
                 var missingLangs = new Set(langs.filter(function (l) { return !hasActiveDefault(n.vanityUrls, l); }));
-                // staleLangs: has a vanity for this lang but computed URL would differ
-                var staleLangs = previewMap
-                    ? new Set(langs.filter(function (l) {
+                // staleLangs: has a vanity but computed URL would differ (from preview)
+                var staleLangs;
+                if (previewFailed) {
+                    // Preview unavailable — treat all non-missing langs as potentially stale
+                    staleLangs = new Set(langs.filter(function (l) { return !missingLangs.has(l); }));
+                } else if (previewMap) {
+                    staleLangs = new Set(langs.filter(function (l) {
                         return !missingLangs.has(l) && previewMap[n.uuid] && previewMap[n.uuid].has(l);
-                    }))
-                    : new Set();
+                    }));
+                } else {
+                    staleLangs = new Set();
+                }
                 // Only list nodes where something would actually change
                 if (missingLangs.size === 0 && staleLangs.size === 0) return;
                 var nodeName = n.path.split('/').pop();
@@ -954,6 +962,7 @@ var _plI18n = {
                 candidates.forEach(function (n) { params.append('nodeIds[]', n.uuid); });
                 langs.forEach(function (l) { params.append('languages[]', l); });
                 params.append('preview', 'true');
+                params.append('bypassExcluded', elBypass.checked ? 'true' : 'false');
 
                 $.ajax({
                     url: actionUrl,
@@ -971,7 +980,9 @@ var _plI18n = {
                         applyAndFinalize(previewMap);
                     },
                     error: function () {
-                        applyAndFinalize(null); // fallback: show all nodes
+                        // Fallback: preview failed — show all candidate nodes regardless of stale status
+                        // (previewMap = false signals "show all" in finalizeRows)
+                        applyAndFinalize(false);
                     }
                 });
             })
