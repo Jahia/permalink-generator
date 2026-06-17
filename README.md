@@ -7,7 +7,7 @@ Install from the Jahia store or follow the [module installation guide](https://a
 
 ## How it works
 
-The module listens to JCR events and manages vanity URLs automatically. All module-generated vanities are tagged with the `jmix:permalinkGenerated` mixin, distinguishing them from manually-created vanities (which are never touched).
+The module listens to JCR events and manages vanity URLs automatically. All module-generated vanities are tagged with the `jmix:permalinkGenerated` mixin, distinguishing them from manually-created vanities.
 
 ### URL construction
 
@@ -28,22 +28,28 @@ Site structure: `Home` / `Section` / `Sub-page`
 
 ### Vanity lifecycle
 
-| Event | Unpublished module-managed vanity | Published module-managed vanity | Manual vanity |
+| Event | Unpublished module-managed vanity | Published module-managed vanity | Manual vanity (SMART mode) |
 |---|---|---|---|
-| **Title change** | Deleted, new one created | Kept as active redirect (`j:default=false`), new one created | Untouched |
-| **Page move** | Deleted, new one created (slug preserved, prefix updated) | Kept as active redirect, new one created | Untouched |
+| **Title change** | Deleted, new one created | Kept as active redirect (`j:default=false`), new one created | Prefix updated, slug preserved |
+| **Page move** | Deleted, new one created (slug preserved, prefix updated) | Kept as active redirect, new one created | Prefix updated, slug preserved |
 | **Page copy** | Stripped from the copy | Stripped from the copy | Untouched |
 | **Page delete** | Deleted | Deactivated (`j:active=false`) | Untouched |
 
 Published vanities are never deleted — they stay active as redirects so old URLs never 404.
 
+Manual vanities (no `jmix:permalinkGenerated` mixin) are detected by checking for an active+default vanity that the module did not create. In SMART mode, when a parent page is renamed or moved, the module updates the URL prefix of child manual vanities while preserving the slug the editor chose. In FORCE mode, manual vanities are fully replaced.
+
 ### Propagation on rename
 
-When a page title changes, all descendant nav-menu pages have their vanities recomputed automatically. Processing is depth-first: each child sees its parent's updated vanity before computing its own.
+When a page title changes, all descendant nav-menu pages have their vanities recomputed automatically. Processing is depth-first: each child sees its parent's updated vanity before computing its own. In SMART mode, manual vanities in the descendant chain receive a prefix-only update (slug preserved).
 
 ### Propagation on move
 
 On move, the slug of each page is preserved — only the prefix changes. Descendants are updated recursively in the same depth-first order.
+
+### Restoring pending-deletion vanities
+
+If a vanity node is marked for deletion (`jmix:markedForDeletion`) and the module later computes the same URL for that node, it removes the deletion markers instead of creating a duplicate — restoring the existing vanity rather than fighting it.
 
 ## Dependencies
 
@@ -55,16 +61,34 @@ On move, the slug of each page is preserved — only the prefix changes. Descend
 
 An administration panel is available under **Site Settings → Permalink Generator**:
 
-- **Mode** — `SMART` (default): respects manually-created vanities and never overwrites them. `FORCE`: always applies module rules even over manual vanities.
-- **Excluded paths** — JCR paths (one per line) for which no vanity will ever be created or updated.
-- **Missing Permalink Audit** — scans all `jnt:page` and `jmix:mainResource` nodes under a given path, lists nodes with missing vanities per language, and lets you generate them in bulk. Language pills appear in italic when a node has no `jcr:title` (node name used as slug). Home page nodes are shown but greyed out (backend skips them).
-- **Force Regeneration** — scans all nodes from the site root and force-regenerates vanity URLs using the computed pattern, overwriting manual vanities. Scope is nodes with at least one missing vanity. A "bypass excluded paths" checkbox includes otherwise-excluded nodes. Uses the same table UI as the audit panel.
+### Mode
+
+- **SMART** (default) — the module creates and updates module-managed vanities but never fully overwrites a manually-set vanity. On title/move events it updates the URL prefix of manual vanities while keeping the editor's chosen slug.
+- **FORCE** — the module always applies its computed URL, replacing manual vanities (which are demoted to redirect-only). Use on new sites or after a planned SEO migration.
+
+### Excluded paths
+
+JCR paths (one per line) for which no vanity will ever be created or updated. An "Include excluded paths" checkbox in the Force Regeneration panel can bypass this per-operation.
+
+### Missing Permalink Audit
+
+Scans `jnt:page` and `jmix:mainResource` nodes under a given path and lists nodes with missing vanities per language. Language pills appear in italic when a node has no `jcr:title` (node name used as slug). Lets you select and generate missing vanities in bulk. Home page nodes are shown but greyed out (backend skips them).
+
+### Force Regeneration
+
+Scans all nodes from the site root and lists pages with **stale** (URL would change), **manual** (manually-set vanity present), or **missing** vanities. Auto-selected rows have a URL that would change — deselect any you want to keep.
+
+A preview POST is made before generating: the panel shows exactly which URLs will change per language before you confirm. Replaced vanities are kept as redirect entries so existing links continue to resolve.
 
 ## Technical notes
 
-- `PermalinkGeneratorService` is a Spring bean with `@Autowired VanityUrlManager`, registered as a Drools global via `ModuleGlobalObject`
-- `GeneratePermalinksAction` — Jahia action (`POST *.generatePermalinks.do`) used by both the audit and force-regen panels; accepts `nodeIds[]`, `languages[]`, and `force` (boolean) POST parameters
-- When `force=true`, the service bypasses the SMART-mode manual-vanity guard and the "already correct" idempotency check, always writing the newly computed URL
-- `jmix:permalinkGenerated` mixin defined in `META-INF/definitions.cnd`
+- `PermalinkGeneratorService` — Spring bean (`@Autowired VanityUrlManager`), registered as a Drools global via `ModuleGlobalObject`
+- `GeneratePermalinksAction` — Jahia action (`POST *.generatePermalinks.do`) used by both panels; POST parameters:
+  - `nodeIds[]` — UUIDs to process
+  - `languages[]` — language codes to process
+  - `preview=true` — returns a JSON preview of what would change without writing (used by Force Regen panel before confirm)
+  - `bypassExcluded=true` — ignore excluded-path config for this operation
+  - `force=true` — bypass SMART-mode manual-vanity guard and "already correct" idempotency check
+- `jmix:permalinkGenerated` mixin defined in `META-INF/definitions.cnd`; its absence on an active+default vanity = manually set
 - Rules in `META-INF/rules.drl` / `META-INF/rules.dsl`
-- Admin panels use two parallel GraphQL queries (`jnt:page` + `jmix:mainResource`) deduped by UUID, augmented with `j:isHomePage` property and `vanityUrls` to drive client-side filtering
+- Admin panels use two parallel GraphQL queries (`jnt:page` + `jmix:mainResource`) deduped by UUID, augmented with `j:isHomePage` and `vanityUrls`
