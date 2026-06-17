@@ -13,3 +13,6 @@ buildNumber.properties
 /.idea/
 /permalink-generator.iml
 /.understand-anything/
+/.claude/
+/.impeccable/
+/PRODUCT.md
