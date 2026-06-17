@@ -41,22 +41,30 @@ public class GeneratePermalinksAction extends Action {
         boolean preview = previewParam != null && !previewParam.isEmpty() && "true".equals(previewParam.get(0));
 
         if (preview) {
-            List<String> bypassParam = parameters.get("bypassExcluded");
-            boolean bypassExcluded = bypassParam != null && !bypassParam.isEmpty() && "true".equals(bypassParam.get(0));
-            List<Map<String, String>> results = permalinkGeneratorService.previewVanityForNodeIds(nodeIds, languages, session, bypassExcluded);
-            JSONArray arr = new JSONArray();
-            for (Map<String, String> r : results) {
-                JSONObject obj = new JSONObject();
-                obj.put("uuid",        r.get("uuid"));
-                obj.put("language",    r.get("language"));
-                obj.put("computedUrl", r.get("computedUrl"));
-                obj.put("currentUrl",  r.get("currentUrl"));
-                obj.put("willChange",  "true".equals(r.get("willChange")));
-                arr.put(obj);
+            try {
+                List<String> bypassParam = parameters.get("bypassExcluded");
+                boolean bypassExcluded = bypassParam != null && !bypassParam.isEmpty() && "true".equals(bypassParam.get(0));
+                List<Map<String, String>> results = permalinkGeneratorService.previewVanityForNodeIds(nodeIds, languages, session, bypassExcluded);
+                JSONArray arr = new JSONArray();
+                for (Map<String, String> r : results) {
+                    JSONObject obj = new JSONObject();
+                    obj.put("uuid",        r.get("uuid"));
+                    obj.put("language",    r.get("language"));
+                    obj.put("computedUrl", r.get("computedUrl"));
+                    obj.put("currentUrl",  r.get("currentUrl"));
+                    obj.put("willChange",  "true".equals(r.get("willChange")));
+                    obj.put("isManual",    "true".equals(r.get("isManual")));
+                    arr.put(obj);
+                }
+                JSONObject body = new JSONObject();
+                body.put("results", arr);
+                return new ActionResult(HttpServletResponse.SC_OK, null, body);
+            } catch (Exception e) {
+                logger.error("GeneratePermalinksAction: preview failed — {}", e.getMessage(), e);
+                JSONObject err = new JSONObject();
+                err.put("error", e.getMessage());
+                return new ActionResult(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, null, err);
             }
-            JSONObject body = new JSONObject();
-            body.put("results", arr);
-            return new ActionResult(HttpServletResponse.SC_OK, null, body);
         }
 
         List<String> forceParam = parameters.get("force");

@@ -975,10 +975,12 @@ var _plI18n = {
                     url: actionUrl,
                     method: 'POST',
                     contentType: 'application/x-www-form-urlencoded',
+                    dataType: 'json',
                     data: params.toString(),
                     success: function (data) {
+                        if (!data || !data.results) { applyAndFinalize(false); return; }
                         var previewMap = {};
-                        (data.results || []).forEach(function (r) {
+                        data.results.forEach(function (r) {
                             if (!previewMap[r.uuid]) previewMap[r.uuid] = { stale: new Set(), manual: new Set() };
                             if (r.willChange) previewMap[r.uuid].stale.add(r.language);
                             if (r.isManual && !r.willChange) previewMap[r.uuid].manual.add(r.language);
