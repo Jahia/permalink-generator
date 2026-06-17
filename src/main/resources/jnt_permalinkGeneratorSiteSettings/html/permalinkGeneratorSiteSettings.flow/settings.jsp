@@ -197,7 +197,8 @@ var _plI18n = {
     regenSummary:  '<fmt:message key="permalinkgenerator.regen.summary"/>',
     regenSuccess:  '<fmt:message key="permalinkgenerator.regen.generate.success"/>',
     regenZero:     '<fmt:message key="permalinkgenerator.regen.generate.zero"/>',
-    regenError:    '<fmt:message key="permalinkgenerator.regen.generate.error"/>'
+    regenError:    '<fmt:message key="permalinkgenerator.regen.generate.error"/>',
+    regenScanned:  '<fmt:message key="permalinkgenerator.regen.scanned"/>'
 };
 </script>
 
@@ -871,7 +872,6 @@ var _plI18n = {
                 nodes.forEach(function (n) {
                     if (!bypass && isExcludedBySettings(n.path)) return;
                     var missingLangs = new Set(langs.filter(function (l) { return !hasActiveDefault(n.vanityUrls, l); }));
-                    if (missingLangs.size === 0) return;
                     var nodeName = n.path.split('/').pop();
                     regenRows.push({
                         uuid: n.uuid,
@@ -891,7 +891,7 @@ var _plI18n = {
                     : '';
 
                 elScanSt.style.color = '#333';
-                elScanSt.textContent = i18n.scanned.replace('{0}', totalScanned).replace('{1}', regenRows.length);
+                elScanSt.textContent = i18n.regenScanned.replace('{0}', totalScanned).replace('{1}', regenRows.length);
                 elResults.style.display = 'block';
                 updateSummary();
                 updateUI();
