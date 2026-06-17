@@ -230,9 +230,44 @@ public class PermalinkGeneratorService {
         while (it.hasNext()) {
             JCRNodeWrapper child = (JCRNodeWrapper) it.nextNode();
             if (child.isNodeType("jmix:navMenuItem")) {
-                updateVanityForNode(child, language, site, session);
+                PermalinkMode mode = getMode(site);
+                if (mode == PermalinkMode.SMART && hasManualActiveDefaultVanity(child, language)) {
+                    // Preserve slug, update parent prefix so the full URL stays valid
+                    updateManualVanityPrefix(child, language, site, session);
+                } else {
+                    updateVanityForNode(child, language, site, session);
+                }
                 updateVanityForDescendants(child, language, site, session);
             }
+        }
+    }
+
+    /**
+     * In SMART cascade: the user chose a custom slug — keep it, but update the parent prefix so the
+     * full URL stays valid when an ancestor title changes.  The vanity stays "manual" (no mixin).
+     */
+    private void updateManualVanityPrefix(JCRNodeWrapper node, String language, JCRSiteNode site, JCRSessionWrapper session) throws RepositoryException {
+        String existingUrl = getActiveDefaultVanityUrl(node, language);
+        if (existingUrl == null) return;
+        String newUrl = computeVanityUrlOnMove(node, language, site.getDefaultLanguage(), existingUrl);
+        if (newUrl == null || newUrl.equals(existingUrl)) return;
+        // Update j:url on the manual vanity node directly (preserves no-mixin / manual status)
+        try {
+            if (!node.hasNode("vanityUrlMapping")) return;
+            NodeIterator it = node.getNode("vanityUrlMapping").getNodes();
+            while (it.hasNext()) {
+                JCRNodeWrapper v = (JCRNodeWrapper) it.nextNode();
+                if (v.isNodeType(MIXIN_PERMALINK_GENERATED)) continue;
+                if (!v.hasProperty("jcr:language") || !language.equals(v.getProperty("jcr:language").getString())) continue;
+                if (!v.hasProperty("j:active") || !v.getProperty("j:active").getBoolean()) continue;
+                if (!v.hasProperty("j:default") || !v.getProperty("j:default").getBoolean()) continue;
+                v.setProperty("j:url", newUrl);
+                session.save();
+                logger.debug("Updated manual vanity prefix {} → {} for {}", existingUrl, newUrl, node.getPath());
+                return;
+            }
+        } catch (RepositoryException e) {
+            logger.warn("Could not update manual vanity prefix for {}: {}", node.getPath(), e.getMessage());
         }
     }
 
@@ -241,13 +276,20 @@ public class PermalinkGeneratorService {
         NodeIterator it = node.getNode("vanityUrlMapping").getNodes();
         while (it.hasNext()) {
             JCRNodeWrapper vanityNode = (JCRNodeWrapper) it.nextNode();
-            if (!vanityNode.isNodeType(MIXIN_PERMALINK_GENERATED) || !vanityNode.hasProperty("jcr:language")) continue;
+            if (!vanityNode.hasProperty("jcr:language")) continue;
             String lang = vanityNode.getProperty("jcr:language").getString();
-            // Preserve the existing slug — only the prefix (parent path) changes on move
             String existingUrl = vanityNode.hasProperty("j:url") ? vanityNode.getProperty("j:url").getString() : null;
             JCRSessionWrapper langSession = JCRSessionFactory.getInstance().getCurrentSystemSession(Constants.EDIT_WORKSPACE, new Locale(lang), null);
             langSession.refresh(false);
-            updateVanityForMovedNode(langSession.getNodeByIdentifier(node.getIdentifier()), lang, existingUrl, site, langSession);
+            JCRNodeWrapper freshNode = langSession.getNodeByIdentifier(node.getIdentifier());
+            if (vanityNode.isNodeType(MIXIN_PERMALINK_GENERATED)) {
+                // Auto-generated: recompute using move logic (preserve slug, update prefix)
+                updateVanityForMovedNode(freshNode, lang, existingUrl, site, langSession);
+            } else if (vanityNode.hasProperty("j:active") && vanityNode.getProperty("j:active").getBoolean()
+                    && vanityNode.hasProperty("j:default") && vanityNode.getProperty("j:default").getBoolean()) {
+                // Manual active+default: preserve slug, update parent prefix
+                updateManualVanityPrefix(freshNode, lang, site, langSession);
+            }
         }
     }
 
