@@ -155,7 +155,8 @@
 .pl-pill-sel  { background: #fff3cd; color: #856404; cursor: pointer; outline: 2px solid #ffc107; }
 .pl-pill-gen  { background: #d4edda; color: #155724; cursor: default; }
 .pl-pill-spin  { background: #cce5ff; color: #004085; cursor: default; }
-.pl-pill-stale { background: #fde8c8; color: #7a4000; cursor: pointer; }
+.pl-pill-stale  { background: #fde8c8; color: #7a4000; cursor: pointer; }
+.pl-pill-manual { background: #ece8f7; color: #5c3d8f; cursor: pointer; }
 .pl-progress-wrap { background: #e9ecef; border-radius: 3px; height: 8px; margin-bottom: 10px; overflow: hidden; }
 .pl-progress-bar  { height: 8px; background: #3c8cba; border-radius: 3px;
                     width: 100%; transform: scaleX(0); transform-origin: left;
@@ -196,6 +197,7 @@ var _plI18n = {
     pillHasForce:  '<fmt:message key="permalinkgenerator.regen.pill.hasForce"/>',
     pillSelForce:  '<fmt:message key="permalinkgenerator.regen.pill.selForce"/>',
     pillStale:     '<fmt:message key="permalinkgenerator.regen.pill.stale"/>',
+    pillManual:    '<fmt:message key="permalinkgenerator.regen.pill.manual"/>',
     regenSummary:  '<fmt:message key="permalinkgenerator.regen.summary"/>',
     regenSuccess:  '<fmt:message key="permalinkgenerator.regen.generate.success"/>',
     regenZero:     '<fmt:message key="permalinkgenerator.regen.generate.zero"/>',
@@ -877,20 +879,24 @@ var _plI18n = {
             nodes.forEach(function (n) {
                 if (!bypass && isExcludedBySettings(n.path)) return;
                 var missingLangs = new Set(langs.filter(function (l) { return !hasActiveDefault(n.vanityUrls, l); }));
-                // staleLangs: has a vanity but computed URL would differ (from preview)
-                var staleLangs;
+                // staleLangs: computed URL differs from current (willChange=true)
+                // manualLangs: manual active+default vanity but computed=current (isManual=true, !willChange)
+                var staleLangs, manualLangs;
                 if (previewFailed) {
-                    // Preview unavailable — treat all non-missing langs as potentially stale
                     staleLangs = new Set(langs.filter(function (l) { return !missingLangs.has(l); }));
+                    manualLangs = new Set();
                 } else if (previewMap) {
                     staleLangs = new Set(langs.filter(function (l) {
-                        return !missingLangs.has(l) && previewMap[n.uuid] && previewMap[n.uuid].has(l);
+                        return !missingLangs.has(l) && previewMap[n.uuid] && previewMap[n.uuid].stale.has(l);
+                    }));
+                    manualLangs = new Set(langs.filter(function (l) {
+                        return !missingLangs.has(l) && previewMap[n.uuid] && previewMap[n.uuid].manual.has(l);
                     }));
                 } else {
                     staleLangs = new Set();
+                    manualLangs = new Set();
                 }
-                // Only list nodes where something would actually change
-                if (missingLangs.size === 0 && staleLangs.size === 0) return;
+                if (missingLangs.size === 0 && staleLangs.size === 0 && manualLangs.size === 0) return;
                 var nodeName = n.path.split('/').pop();
                 var row = {
                     uuid: n.uuid,
@@ -900,6 +906,7 @@ var _plI18n = {
                     isHomePage: !!(n.isHomePage && n.isHomePage.value === 'true'),
                     missingLangs: missingLangs,
                     staleLangs: staleLangs,
+                    manualLangs: manualLangs,
                     generated: new Set()
                 };
                 regenRows.push(row);
@@ -972,10 +979,9 @@ var _plI18n = {
                     success: function (data) {
                         var previewMap = {};
                         (data.results || []).forEach(function (r) {
-                            if (r.willChange) {
-                                if (!previewMap[r.uuid]) previewMap[r.uuid] = new Set();
-                                previewMap[r.uuid].add(r.language);
-                            }
+                            if (!previewMap[r.uuid]) previewMap[r.uuid] = { stale: new Set(), manual: new Set() };
+                            if (r.willChange) previewMap[r.uuid].stale.add(r.language);
+                            if (r.isManual && !r.willChange) previewMap[r.uuid].manual.add(r.language);
                         });
                         applyAndFinalize(previewMap);
                     },
@@ -1022,10 +1028,11 @@ var _plI18n = {
         tdPath.title = row.path; tdPath.textContent = row.path;
         tr.appendChild(tdPath);
 
-        // Auto-select missing and stale langs
+        // Auto-select missing, stale, and manual langs
         if (!row.isHomePage) {
             row.missingLangs.forEach(function (l) { selectCell(row.uuid, l); });
-            if (row.staleLangs) row.staleLangs.forEach(function (l) { selectCell(row.uuid, l); });
+            if (row.staleLangs)  row.staleLangs.forEach(function (l)  { selectCell(row.uuid, l); });
+            if (row.manualLangs) row.manualLangs.forEach(function (l) { selectCell(row.uuid, l); });
         }
 
         langs.forEach(function (lang) {
@@ -1062,6 +1069,10 @@ var _plI18n = {
                 pill.classList.add('pl-pill-stale');
                 pill.textContent = lang;
                 pill.title = i18n.pillStale;
+            } else if (row.manualLangs && row.manualLangs.has(lang)) {
+                pill.classList.add('pl-pill-manual');
+                pill.textContent = lang;
+                pill.title = i18n.pillManual;
             } else {
                 pill.classList.add('pl-pill-has');
                 pill.textContent = lang;

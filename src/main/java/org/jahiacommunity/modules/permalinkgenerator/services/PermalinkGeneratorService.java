@@ -26,9 +26,11 @@ import javax.jcr.Value;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Creates and maintains permanent vanity URLs for pages and displayable content (jmix:renderableMainResource).
@@ -646,6 +648,8 @@ public class PermalinkGeneratorService {
         Map<String, Map<String, String>> computedCache = new HashMap<>();
         // nodeId → lang → current active+default URL (loaded once per node, all langs)
         Map<String, Map<String, String>> currentVanityCache = new HashMap<>();
+        // nodeId → set of langs whose active+default vanity is manual (no jmix:permalinkGenerated)
+        Map<String, Set<String>> manualLangCache = new HashMap<>();
 
         for (String language : languages) {
             JCRSessionWrapper langSession;
@@ -683,8 +687,11 @@ public class PermalinkGeneratorService {
                     // Load node's own vanities once (all langs), shared across language passes
                     Map<String, String> nodeVanities = currentVanityCache.computeIfAbsent(nodeId,
                             k -> loadCurrentVanitiesForNode(node));
+                    Set<String> manualLangs = manualLangCache.computeIfAbsent(nodeId,
+                            k -> loadManualLangsForNode(node));
                     String currentUrl = nodeVanities.get(language);
                     boolean willChange = computedUrl != null && !computedUrl.equals(currentUrl);
+                    boolean isManual = manualLangs.contains(language);
 
                     Map<String, String> entry = new HashMap<>();
                     entry.put("uuid",        nodeId);
@@ -693,6 +700,7 @@ public class PermalinkGeneratorService {
                     entry.put("computedUrl", computedUrl != null ? computedUrl : "");
                     entry.put("currentUrl",  currentUrl  != null ? currentUrl  : "");
                     entry.put("willChange",  String.valueOf(willChange));
+                    entry.put("isManual",    String.valueOf(isManual));
                     results.add(entry);
                 } catch (Exception e) {
                     logger.warn("Could not preview vanity for node {} lang {}: {}", nodeId, language, e.getMessage());
@@ -804,6 +812,29 @@ public class PermalinkGeneratorService {
             }
         } catch (RepositoryException e) {
             logger.debug("Could not load vanities for {}: {}", node.getPath(), e.getMessage());
+        }
+        return result;
+    }
+
+    /**
+     * Returns the set of languages that have a manual (no jmix:permalinkGenerated) active+default
+     * vanity URL on this node. Loaded once per node and cached by callers.
+     */
+    private Set<String> loadManualLangsForNode(JCRNodeWrapper node) {
+        Set<String> result = new HashSet<>();
+        try {
+            if (!node.hasNode("vanityUrlMapping")) return result;
+            NodeIterator it = node.getNode("vanityUrlMapping").getNodes();
+            while (it.hasNext()) {
+                JCRNodeWrapper v = (JCRNodeWrapper) it.nextNode();
+                if (v.isNodeType(MIXIN_PERMALINK_GENERATED)) continue;
+                if (!v.hasProperty("jcr:language")) continue;
+                if (!v.hasProperty("j:active") || !v.getProperty("j:active").getBoolean()) continue;
+                if (!v.hasProperty("j:default") || !v.getProperty("j:default").getBoolean()) continue;
+                result.add(v.getProperty("jcr:language").getString());
+            }
+        } catch (RepositoryException e) {
+            logger.debug("Could not load manual langs for {}: {}", node.getPath(), e.getMessage());
         }
         return result;
     }
