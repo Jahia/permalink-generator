@@ -1081,16 +1081,24 @@ var _plI18n = {
         var actionLabel = { created: i18n.reportCreated, promoted: i18n.reportPromoted, already_correct: i18n.reportCorrect };
         var actionColor = { created: '#27ae60', promoted: '#3c8cba', already_correct: '#888' };
 
+        var hasOldUrls = reportEntries.some(function (e) { return e.oldUrl; });
         var html = '<h4 style="margin:0 0 8px 0;font-size:14px;">' + i18n.reportTitle + '</h4>';
         html += '<div style="overflow-x:auto;"><table class="pl-audit-table" style="font-size:11px;">';
-        html += '<thead><tr><th style="width:44px;">Lang</th><th>Path</th><th>Action</th><th>URL</th></tr></thead><tbody>';
+        html += '<thead><tr>';
+        html += '<th style="width:44px;">Lang</th><th>Path</th><th>Action</th>';
+        if (hasOldUrls) html += '<th>Previous vanity</th>';
+        html += '<th>New vanity</th>';
+        html += '</tr></thead><tbody>';
         reportEntries.forEach(function (e) {
             var label = actionLabel[e.action] || e.action;
             var color = actionColor[e.action] || '#555';
             html += '<tr>';
             html += '<td style="text-align:center;"><span class="pl-pill" style="background:#e8eef4;color:#333;">' + e.language.toUpperCase() + '</span></td>';
-            html += '<td style="font-family:monospace;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + e.path + '">' + e.path + '</td>';
+            html += '<td style="font-family:monospace;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + e.path + '">' + e.path + '</td>';
             html += '<td style="color:' + color + ';white-space:nowrap;">' + label + '</td>';
+            if (hasOldUrls) {
+                html += '<td style="font-family:monospace;color:#999;">' + (e.oldUrl || '—') + '</td>';
+            }
             html += '<td style="font-family:monospace;">' + e.url + '</td>';
             html += '</tr>';
         });
@@ -1177,7 +1185,7 @@ var _plI18n = {
                             if (!row) return;
                             var opResult = resultMap[uuid] && resultMap[uuid][lang];
                             if (opResult) {
-                                reportEntries.push({ path: opResult.path, language: lang, action: opResult.action, url: opResult.url });
+                                reportEntries.push({ path: opResult.path, language: lang, action: opResult.action, url: opResult.url, oldUrl: opResult.oldUrl || '' });
                             }
                             row.generated.add(lang);
                             deselectCell(uuid, lang);

@@ -52,6 +52,7 @@ public class GeneratePermalinksAction extends Action {
             obj.put("language", r.get("language"));
             obj.put("action",   r.get("action"));
             obj.put("url",      r.get("url"));
+            obj.put("oldUrl",   r.getOrDefault("oldUrl", ""));
             arr.put(obj);
         }
         JSONObject body = new JSONObject();
