@@ -154,7 +154,8 @@
 .pl-pill-miss { background: #f8d7da; color: #721c24; cursor: pointer; }
 .pl-pill-sel  { background: #fff3cd; color: #856404; cursor: pointer; outline: 2px solid #ffc107; }
 .pl-pill-gen  { background: #d4edda; color: #155724; cursor: default; }
-.pl-pill-spin { background: #cce5ff; color: #004085; cursor: default; }
+.pl-pill-spin  { background: #cce5ff; color: #004085; cursor: default; }
+.pl-pill-stale { background: #fde8c8; color: #7a4000; cursor: pointer; }
 .pl-progress-wrap { background: #e9ecef; border-radius: 3px; height: 8px; margin-bottom: 10px; overflow: hidden; }
 .pl-progress-bar  { height: 8px; background: #3c8cba; border-radius: 3px;
                     width: 100%; transform: scaleX(0); transform-origin: left;
@@ -194,6 +195,7 @@ var _plI18n = {
     pillNoTitle:   '<fmt:message key="permalinkgenerator.regen.pill.noTitle"/>',
     pillHasForce:  '<fmt:message key="permalinkgenerator.regen.pill.hasForce"/>',
     pillSelForce:  '<fmt:message key="permalinkgenerator.regen.pill.selForce"/>',
+    pillStale:     '<fmt:message key="permalinkgenerator.regen.pill.stale"/>',
     regenSummary:  '<fmt:message key="permalinkgenerator.regen.summary"/>',
     regenSuccess:  '<fmt:message key="permalinkgenerator.regen.generate.success"/>',
     regenZero:     '<fmt:message key="permalinkgenerator.regen.generate.zero"/>',
@@ -863,6 +865,40 @@ var _plI18n = {
         var qPage  = "SELECT * FROM [jnt:page] AS n WHERE ISDESCENDANTNODE(n, '" + escapedPath + "')";
         var qMixin = "SELECT * FROM [jmix:mainResource] AS n WHERE ISDESCENDANTNODE(n, '" + escapedPath + "')";
 
+        function finish() {
+            scanning = false;
+            document.getElementById('plRBtnScan').disabled = false;
+        }
+
+        function finalizeRows(nodes, previewMap) {
+            var bypass = elBypass.checked;
+            nodes.forEach(function (n) {
+                if (!bypass && isExcludedBySettings(n.path)) return;
+                var missingLangs = new Set(langs.filter(function (l) { return !hasActiveDefault(n.vanityUrls, l); }));
+                // staleLangs: has a vanity for this lang but computed URL would differ
+                var staleLangs = previewMap
+                    ? new Set(langs.filter(function (l) {
+                        return !missingLangs.has(l) && previewMap[n.uuid] && previewMap[n.uuid].has(l);
+                    }))
+                    : new Set();
+                // Only list nodes where something would actually change
+                if (missingLangs.size === 0 && staleLangs.size === 0) return;
+                var nodeName = n.path.split('/').pop();
+                var row = {
+                    uuid: n.uuid,
+                    path: n.path,
+                    displayName: n.displayName || nodeName,
+                    hasNoTitle: (n.displayName === nodeName),
+                    isHomePage: !!(n.isHomePage && n.isHomePage.value === 'true'),
+                    missingLangs: missingLangs,
+                    staleLangs: staleLangs,
+                    generated: new Set()
+                };
+                regenRows.push(row);
+                appendRow(row);
+            });
+        }
+
         Promise.all([
             gql({ query: GQL_QUERY, variables: { q: qPage,  lim: BATCH, off: offset } }),
             gql({ query: GQL_QUERY, variables: { q: qMixin, lim: BATCH, off: offset } })
@@ -882,6 +918,7 @@ var _plI18n = {
                 if (errors.length && nodes.length === 0) {
                     elScanSt.style.color = '#c0392b';
                     elScanSt.textContent = i18n.errorGraphql.replace('{0}', errors.join('; '));
+                    finish();
                     return;
                 }
                 var hasMore = results.some(function(data) {
@@ -891,41 +928,57 @@ var _plI18n = {
                 totalScanned += nodes.length;
                 offset += BATCH;
 
+                // Collect candidates (bypass check) for preview call
                 var bypass = elBypass.checked;
-                nodes.forEach(function (n) {
-                    if (!bypass && isExcludedBySettings(n.path)) return;
-                    var missingLangs = new Set(langs.filter(function (l) { return !hasActiveDefault(n.vanityUrls, l); }));
-                    var nodeName = n.path.split('/').pop();
-                    regenRows.push({
-                        uuid: n.uuid,
-                        path: n.path,
-                        displayName: n.displayName || nodeName,
-                        hasNoTitle: (n.displayName === nodeName),
-                        isHomePage: !!(n.isHomePage && n.isHomePage.value === 'true'),
-                        missingLangs: missingLangs,
-                        generated: new Set()
-                    });
-                    appendRow(regenRows[regenRows.length - 1]);
+                var candidates = nodes.filter(function (n) { return bypass || !isExcludedBySettings(n.path); });
+
+                function applyAndFinalize(previewMap) {
+                    finalizeRows(nodes, previewMap);
+
+                    elLoadWrap.style.display = hasMore ? 'block' : 'none';
+                    elLoadSt.textContent = hasMore
+                        ? i18n.loadMoreSt.replace('{0}', offset).replace('{1}', regenRows.length)
+                        : '';
+                    elScanSt.style.color = '#333';
+                    elScanSt.textContent = i18n.regenScanned.replace('{0}', totalScanned).replace('{1}', regenRows.length);
+                    elResults.style.display = 'block';
+                    updateSummary();
+                    updateUI();
+                    finish();
+                }
+
+                if (candidates.length === 0) { applyAndFinalize({}); return; }
+
+                // Preview: ask server which nodes would actually change
+                var params = new URLSearchParams();
+                candidates.forEach(function (n) { params.append('nodeIds[]', n.uuid); });
+                langs.forEach(function (l) { params.append('languages[]', l); });
+                params.append('preview', 'true');
+
+                $.ajax({
+                    url: actionUrl,
+                    method: 'POST',
+                    contentType: 'application/x-www-form-urlencoded',
+                    data: params.toString(),
+                    success: function (data) {
+                        var previewMap = {};
+                        (data.results || []).forEach(function (r) {
+                            if (r.willChange) {
+                                if (!previewMap[r.uuid]) previewMap[r.uuid] = new Set();
+                                previewMap[r.uuid].add(r.language);
+                            }
+                        });
+                        applyAndFinalize(previewMap);
+                    },
+                    error: function () {
+                        applyAndFinalize(null); // fallback: show all nodes
+                    }
                 });
-
-                elLoadWrap.style.display = hasMore ? 'block' : 'none';
-                elLoadSt.textContent = hasMore
-                    ? i18n.loadMoreSt.replace('{0}', offset).replace('{1}', regenRows.length)
-                    : '';
-
-                elScanSt.style.color = '#333';
-                elScanSt.textContent = i18n.regenScanned.replace('{0}', totalScanned).replace('{1}', regenRows.length);
-                elResults.style.display = 'block';
-                updateSummary();
-                updateUI();
             })
             .catch(function (e) {
                 elScanSt.style.color = '#c0392b';
                 elScanSt.textContent = i18n.errorNetwork.replace('{0}', e.message || '?');
-            })
-            .finally(function () {
-                scanning = false;
-                document.getElementById('plRBtnScan').disabled = false;
+                finish();
             });
     }
 
@@ -958,6 +1011,12 @@ var _plI18n = {
         tdPath.title = row.path; tdPath.textContent = row.path;
         tr.appendChild(tdPath);
 
+        // Auto-select missing and stale langs
+        if (!row.isHomePage) {
+            row.missingLangs.forEach(function (l) { selectCell(row.uuid, l); });
+            if (row.staleLangs) row.staleLangs.forEach(function (l) { selectCell(row.uuid, l); });
+        }
+
         langs.forEach(function (lang) {
             var td = document.createElement('td');
             td.style.textAlign = 'center';
@@ -988,6 +1047,10 @@ var _plI18n = {
                 pill.classList.add('pl-pill-miss');
                 pill.textContent = lang;
                 pill.title = i18n.pillMissing;
+            } else if (row.staleLangs && row.staleLangs.has(lang)) {
+                pill.classList.add('pl-pill-stale');
+                pill.textContent = lang;
+                pill.title = i18n.pillStale;
             } else {
                 pill.classList.add('pl-pill-has');
                 pill.textContent = lang;

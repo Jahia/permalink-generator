@@ -616,6 +616,47 @@ public class PermalinkGeneratorService {
      * Skips nodes that cannot be found or are excluded by site configuration.
      * Returns the number of (node × language) pairs processed.
      */
+    /**
+     * Preview mode: compute what would happen per node×language without making any changes.
+     * Returns entries with willChange=true only when the computed URL differs from the current active+default.
+     */
+    public List<java.util.Map<String, String>> previewVanityForNodeIds(List<String> nodeIds, List<String> languages, JCRSessionWrapper session) {
+        List<java.util.Map<String, String>> results = new ArrayList<>();
+        for (String nodeId : nodeIds) {
+            for (String language : languages) {
+                try {
+                    JCRSessionWrapper langSession = JCRSessionFactory.getInstance()
+                            .getCurrentSystemSession(Constants.EDIT_WORKSPACE, new Locale(language), null);
+                    JCRNodeWrapper node = langSession.getNodeByIdentifier(nodeId);
+                    JCRSiteNode site = node.getResolveSite();
+                    if (site == null || !site.getInstalledModules().contains("permalink-generator")) continue;
+                    if (node.hasProperty("j:isHomePage") && node.getProperty("j:isHomePage").getBoolean()) continue;
+                    if (node.isNodeType(MIXIN_PERMALINK_EXCLUDED)) continue;
+                    if (isExcludedPath(node, site)) continue;
+                    RenderContext context = new RenderContext(null, null, node.getSession().getUser());
+                    context.setSite(site);
+                    if (!JCRContentUtils.isADisplayableNode(node, context) || node.isNodeType("jnt:file")) continue;
+
+                    String computedUrl = computeVanityUrl(node, language, site.getDefaultLanguage());
+                    String currentUrl  = getActiveDefaultVanityUrl(node, language);
+                    boolean willChange = computedUrl != null && !computedUrl.equals(currentUrl);
+
+                    java.util.Map<String, String> entry = new java.util.HashMap<>();
+                    entry.put("uuid",        nodeId);
+                    entry.put("path",        node.getPath());
+                    entry.put("language",    language);
+                    entry.put("computedUrl", computedUrl != null ? computedUrl : "");
+                    entry.put("currentUrl",  currentUrl  != null ? currentUrl  : "");
+                    entry.put("willChange",  String.valueOf(willChange));
+                    results.add(entry);
+                } catch (Exception e) {
+                    logger.warn("Could not preview vanity for node {} lang {}: {}", nodeId, language, e.getMessage());
+                }
+            }
+        }
+        return results;
+    }
+
     public List<java.util.Map<String, String>> generateVanityForNodeIds(List<String> nodeIds, List<String> languages, JCRSessionWrapper session) {
         return generateVanityForNodeIds(nodeIds, languages, session, false);
     }
