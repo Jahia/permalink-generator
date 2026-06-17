@@ -876,7 +876,7 @@ var _plI18n = {
             var bypass = elBypass.checked;
             // previewMap === false → preview call failed; show all nodes (conservative fallback)
             var previewFailed = (previewMap === false);
-            nodes.forEach(function (n) {
+            nodes.slice().sort(function (a, b) { return a.path < b.path ? -1 : a.path > b.path ? 1 : 0; }).forEach(function (n) {
                 if (!bypass && isExcludedBySettings(n.path)) return;
                 var missingLangs = new Set(langs.filter(function (l) { return !hasActiveDefault(n.vanityUrls, l); }));
                 // staleLangs: computed URL differs from current (willChange=true)
