@@ -17,13 +17,6 @@
 <fmt:message key="permalinkgenerator.mode.FORCE.help"  var="helpForce"/>
 <fmt:message key="label.save"                          var="labelSave"/>
 
-<c:set var="excludedPathsList" value=""/>
-<c:if test="${site.hasProperty('j:excludedPaths')}">
-    <c:forEach items="${site.getProperty('j:excludedPaths').values}" var="epVal" varStatus="epStatus">
-        <c:if test="${!epStatus.first}"><c:set var="excludedPathsList" value="${excludedPathsList}&#10;"/></c:if>
-        <c:set var="excludedPathsList" value="${excludedPathsList}${epVal.string}"/>
-    </c:forEach>
-</c:if>
 
 <style>
     .permalink-mode-panel {
@@ -69,7 +62,8 @@
         <div class="controls">
             <textarea id="excludedPaths" class="input-xlarge" rows="5"
                       placeholder="/sites/mysite/contents/legacy"
-                      style="font-family:monospace;font-size:12px;">${fn:escapeXml(excludedPathsList)}</textarea>
+                      style="font-family:monospace;font-size:12px;"><c:if test="${site.hasProperty('j:excludedPaths')}"><c:forEach items="${site.getProperty('j:excludedPaths').values}" var="epVal" varStatus="epStatus"><c:if test="${!epStatus.first}">
+</c:if><c:out value="${epVal.string}"/></c:forEach></c:if></textarea>
             <p class="help-block"><fmt:message key="permalinkgenerator.excludedPaths.help"/></p>
         </div>
     </div>

@@ -11,19 +11,28 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.osgi.service.component.annotations.Activate;
+import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.Reference;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.util.List;
 import java.util.Map;
 
+@Component(service = Action.class, immediate = true)
 public class GeneratePermalinksAction extends Action {
 
     private static final Logger logger = LoggerFactory.getLogger(GeneratePermalinksAction.class);
 
-    @Autowired
+    @Reference
     private PermalinkGeneratorService permalinkGeneratorService;
+
+    @Activate
+    public void activate() {
+        setName("generatePermalinks");
+        setRequiredMethods("POST");
+    }
 
     @Override
     public ActionResult doExecute(HttpServletRequest req, RenderContext renderContext,

@@ -18,9 +18,6 @@
         <url>https://github.com/Jahia/permalink-generator.git</url>
       <tag>HEAD</tag>
   </scm>
-    <properties>
-        <require-capability>osgi.extender;filter:="(osgi.extender=org.jahia.bundles.blueprint.extender.config)"</require-capability>
-    </properties>
     <repositories>
         <repository>
             <id>jahia-public</id>

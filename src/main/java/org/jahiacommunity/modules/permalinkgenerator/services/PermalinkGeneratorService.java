@@ -16,7 +16,8 @@ import org.jahia.services.seo.jcr.VanityUrlManager;
 import org.jahia.taglibs.jcr.node.JCRTagUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.Reference;
 
 import javax.jcr.ItemNotFoundException;
 import javax.jcr.NodeIterator;
@@ -37,6 +38,7 @@ import java.util.Set;
  * Auto-generated vanities are tagged with jmix:permalinkGenerated to distinguish
  * them from manually-created vanities, which are never touched.
  */
+@Component(service = PermalinkGeneratorService.class)
 public class PermalinkGeneratorService {
 
     private static final Logger logger = LoggerFactory.getLogger(PermalinkGeneratorService.class);
@@ -57,7 +59,7 @@ public class PermalinkGeneratorService {
         }
     }
 
-    @Autowired
+    @Reference
     private VanityUrlManager vanityUrlManager;
 
     // -------------------------------------------------------------------------
