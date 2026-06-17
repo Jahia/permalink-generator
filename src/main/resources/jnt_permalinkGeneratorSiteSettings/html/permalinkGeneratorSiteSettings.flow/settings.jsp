@@ -198,7 +198,11 @@ var _plI18n = {
     regenSuccess:  '<fmt:message key="permalinkgenerator.regen.generate.success"/>',
     regenZero:     '<fmt:message key="permalinkgenerator.regen.generate.zero"/>',
     regenError:    '<fmt:message key="permalinkgenerator.regen.generate.error"/>',
-    regenScanned:  '<fmt:message key="permalinkgenerator.regen.scanned"/>'
+    regenScanned:  '<fmt:message key="permalinkgenerator.regen.scanned"/>',
+    reportCreated: '<fmt:message key="permalinkgenerator.regen.report.created"/>',
+    reportPromoted:'<fmt:message key="permalinkgenerator.regen.report.promoted"/>',
+    reportCorrect: '<fmt:message key="permalinkgenerator.regen.report.already_correct"/>',
+    reportTitle:   '<fmt:message key="permalinkgenerator.regen.report.title"/>'
 };
 </script>
 
@@ -743,6 +747,25 @@ var _plI18n = {
             </button>
             <span id="plRLoadMoreStatus" style="font-size:12px;color:#777;margin-left:8px;"></span>
         </div>
+        <div id="plRReport" style="display:none;margin-top:20px;"></div>
+    </div>
+</div>
+
+<%-- Confirm modal for Force Regeneration --%>
+<div id="plRConfirmModal" class="modal hide fade" tabindex="-1" role="dialog">
+    <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+        <h3><fmt:message key="permalinkgenerator.regen.confirm.title"/></h3>
+    </div>
+    <div class="modal-body">
+        <p><fmt:message key="permalinkgenerator.regen.confirm.body"/></p>
+    </div>
+    <div class="modal-footer">
+        <button class="btn" data-dismiss="modal"><fmt:message key="label.cancel"/></button>
+        <button class="btn btn-warning" id="plRConfirmOk">
+            <i class="icon-cog icon-white"></i>
+            <fmt:message key="permalinkgenerator.regen.confirm.proceed"/>
+        </button>
     </div>
 </div>
 
@@ -1049,6 +1072,33 @@ var _plI18n = {
         });
     }
 
+    var reportEntries = []; // accumulated across all chunks
+
+    function renderReport() {
+        var elReport = document.getElementById('plRReport');
+        if (reportEntries.length === 0) { elReport.style.display = 'none'; return; }
+
+        var actionLabel = { created: i18n.reportCreated, promoted: i18n.reportPromoted, already_correct: i18n.reportCorrect };
+        var actionColor = { created: '#27ae60', promoted: '#3c8cba', already_correct: '#888' };
+
+        var html = '<h4 style="margin:0 0 8px 0;font-size:14px;">' + i18n.reportTitle + '</h4>';
+        html += '<div style="overflow-x:auto;"><table class="pl-audit-table" style="font-size:11px;">';
+        html += '<thead><tr><th style="width:44px;">Lang</th><th>Path</th><th>Action</th><th>URL</th></tr></thead><tbody>';
+        reportEntries.forEach(function (e) {
+            var label = actionLabel[e.action] || e.action;
+            var color = actionColor[e.action] || '#555';
+            html += '<tr>';
+            html += '<td style="text-align:center;"><span class="pl-pill" style="background:#e8eef4;color:#333;">' + e.language.toUpperCase() + '</span></td>';
+            html += '<td style="font-family:monospace;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + e.path + '">' + e.path + '</td>';
+            html += '<td style="color:' + color + ';white-space:nowrap;">' + label + '</td>';
+            html += '<td style="font-family:monospace;">' + e.url + '</td>';
+            html += '</tr>';
+        });
+        html += '</tbody></table></div>';
+        elReport.innerHTML = html;
+        elReport.style.display = 'block';
+    }
+
     function doGenerate() {
         var byLang = {};
         Object.keys(selections).forEach(function (uuid) {
@@ -1059,6 +1109,11 @@ var _plI18n = {
         });
         var langKeys = Object.keys(byLang);
         if (langKeys.length === 0) return;
+
+        reportEntries = [];
+        var elReport = document.getElementById('plRReport');
+        elReport.style.display = 'none';
+        elReport.innerHTML = '';
 
         var total = totalSelected();
         var done  = 0;
@@ -1079,6 +1134,7 @@ var _plI18n = {
                     elGenSt.textContent = i18n.regenZero;
                 }
                 elBtnGen.disabled = (totalSelected() === 0);
+                renderReport();
                 return;
             }
             var lang  = langKeys[li];
@@ -1105,10 +1161,24 @@ var _plI18n = {
                     method: 'POST',
                     contentType: 'application/x-www-form-urlencoded',
                     data: params.toString(),
-                    success: function () {
+                    success: function (data) {
+                        // Parse JSON results from backend
+                        var chunkResults = [];
+                        try { chunkResults = (data.results || []); } catch(e) {}
+                        // Build a map uuid → result for this chunk
+                        var resultMap = {};
+                        chunkResults.forEach(function (r) {
+                            if (!resultMap[r.uuid]) resultMap[r.uuid] = {};
+                            resultMap[r.uuid][r.language] = r;
+                        });
+
                         chunks[ci].forEach(function (uuid) {
                             var row = regenRows.find(function (r) { return r.uuid === uuid; });
                             if (!row) return;
+                            var opResult = resultMap[uuid] && resultMap[uuid][lang];
+                            if (opResult) {
+                                reportEntries.push({ path: opResult.path, language: lang, action: opResult.action, url: opResult.url });
+                            }
                             row.generated.add(lang);
                             deselectCell(uuid, lang);
                             done++;
@@ -1135,7 +1205,12 @@ var _plI18n = {
 
     document.getElementById('plRBtnScan').addEventListener('click', function () { doScan(true); });
     document.getElementById('plRBtnLoadMore').addEventListener('click', function () { doScan(false); });
-    elBtnGen.addEventListener('click', doGenerate);
+    // Generate button opens confirm modal; actual generation fires from modal confirm button
+    elBtnGen.addEventListener('click', function () { $('#plRConfirmModal').modal('show'); });
+    document.getElementById('plRConfirmOk').addEventListener('click', function () {
+        $('#plRConfirmModal').modal('hide');
+        doGenerate();
+    });
 
     elSelectAll.addEventListener('change', function () {
         if (elSelectAll.checked) {

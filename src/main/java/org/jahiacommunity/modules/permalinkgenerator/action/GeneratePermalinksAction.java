@@ -7,6 +7,8 @@ import org.jahia.services.render.RenderContext;
 import org.jahia.services.render.Resource;
 import org.jahia.services.render.URLResolver;
 import org.jahiacommunity.modules.permalinkgenerator.services.PermalinkGeneratorService;
+import org.json.JSONArray;
+import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,8 +41,21 @@ public class GeneratePermalinksAction extends Action {
             return new ActionResult(HttpServletResponse.SC_BAD_REQUEST);
         }
 
-        int count = permalinkGeneratorService.generateVanityForNodeIds(nodeIds, languages, session, force);
-        logger.info("GeneratePermalinksAction: {} permalink(s) created (force={})", count, force);
-        return new ActionResult(HttpServletResponse.SC_OK);
+        List<Map<String, String>> results = permalinkGeneratorService.generateVanityForNodeIds(nodeIds, languages, session, force);
+        logger.info("GeneratePermalinksAction: {} operation(s) completed (force={})", results.size(), force);
+
+        JSONArray arr = new JSONArray();
+        for (Map<String, String> r : results) {
+            JSONObject obj = new JSONObject();
+            obj.put("uuid",     r.get("uuid"));
+            obj.put("path",     r.get("path"));
+            obj.put("language", r.get("language"));
+            obj.put("action",   r.get("action"));
+            obj.put("url",      r.get("url"));
+            arr.put(obj);
+        }
+        JSONObject body = new JSONObject();
+        body.put("results", arr);
+        return new ActionResult(HttpServletResponse.SC_OK, null, body);
     }
 }
