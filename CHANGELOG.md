@@ -25,13 +25,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - **`jmix:permalinkExcluded` mixin** — editors can exclude a single page from automatic vanity generation directly in Content Editor.
 - **Excluded paths** — site-level JCR path list; the module skips all nodes under these subtrees.
 
-**Admin panel** *(did not exist in 1.0.x)*
+**Admin panel** *(did not exist in 1.0.x — accessible via Site Settings → Permalink Generator)*
 
-- **Missing Permalink Audit** — lists pages that have no vanity URL per language; supports bulk selection and generation.
-- **Force Regeneration** — scans the entire site and previews which URLs would change (stale, manual, or missing) before writing anything. Confirm modal and per-page result report with previous/new URL columns. Smart filter: only nodes where the computed URL actually differs are listed.
-- **SMART / FORCE mode toggle** — stored per site; controls all background and bulk operations.
+The module now ships a full administration UI reachable from **Site Settings → Permalink Generator**. From this single panel, site administrators can:
+
+- **Configure the generation mode** (SMART or FORCE) — stored per site, applies to all automatic and bulk operations.
+- **Define excluded paths** — JCR paths (one per line) whose subtrees are entirely skipped.
+- **Run the Missing Permalink Audit** — lists all pages that have no vanity URL per language; supports bulk selection and one-click generation.
+- **Run Force Regeneration** — scans the entire site and shows a live preview of exactly which URLs would change (stale, manual, or missing) before writing anything. Each row shows the previous and new URL. Confirm modal before any write; smart filter excludes nodes where nothing would change.
+
+Additional UI details:
 - **Pill color legend** — collapsible help overlay in both panels explaining each pill state.
 - **Translations** — full UI in EN, FR, DE, ES, IT, PT.
+
+### Removed
+
+- **Spring framework dependency** — the service layer is now pure OSGi Declarative Services (`@Component` / `@Reference`). The `META-INF/spring/` wiring that was present in 1.0.x has been removed.
 
 **Testing**
 
