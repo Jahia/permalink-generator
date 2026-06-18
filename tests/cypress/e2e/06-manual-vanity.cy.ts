@@ -1,4 +1,4 @@
-import {waitForVanityUrl, makeVanityManual, setPageTitle, assertNoVanityUrlChange, SITE_KEY} from '../support/permalinkgen'
+import {waitForVanityUrl, waitForVanityUrlContaining, makeVanityManual, setPageTitle, assertNoVanityUrlChange, SITE_KEY} from '../support/permalinkgen'
 
 describe('Scenario 6 — SMART mode respects manual vanity URLs', () => {
     const pagePath = `/sites/${SITE_KEY}/home/page-about`
@@ -24,7 +24,7 @@ describe('Scenario 6 — SMART mode respects manual vanity URLs', () => {
 
     it('SMART mode: renaming EN title DOES update the EN auto-generated vanity', () => {
         setPageTitle(pagePath, 'en', 'About Our Company')
-        waitForVanityUrl(pagePath, 'en').then((newUrl: string) => {
+        waitForVanityUrlContaining(pagePath, 'en', 'about-our-company', 30000).then((newUrl: string) => {
             expect(newUrl).to.include('about-our-company')
         })
     })

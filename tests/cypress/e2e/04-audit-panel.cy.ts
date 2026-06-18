@@ -4,6 +4,7 @@ describe('Scenario 4 — Audit panel generates missing vanity URLs', () => {
     before(() => {
         cy.login()
         cy.visit(adminUrl(SITE_KEY_AUDIT))
+        cy.get('#permalink-generator-root', {timeout: 30000}).should('exist')
     })
 
     it('loads the admin page with all panel headings', () => {

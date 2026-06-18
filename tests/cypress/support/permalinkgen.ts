@@ -116,6 +116,23 @@ export const waitForVanityUrl = (path: string, language: string, timeoutMs: numb
     return attempt()
 }
 
+// Poll until the active default vanity URL for a language CONTAINS the given substring.
+// Use after a title rename to wait for the module to fire and update the URL.
+export const waitForVanityUrlContaining = (path: string, language: string, substring: string, timeoutMs: number = 15000) => {
+    const interval = 2000
+    const end = Date.now() + timeoutMs
+    const attempt = (): Cypress.Chainable<string> => {
+        return getVanityUrls(path).then((resp: any) => {
+            const vanities = resp?.data?.jcr?.nodeByPath?.vanityUrls ?? []
+            const match = vanities.find((v: any) => v.language === language && v.active && v.default && v.url.includes(substring))
+            if (match) return match.url as string
+            if (Date.now() >= end) throw new Error(`waitForVanityUrlContaining: no vanity for [${language}] on ${path} containing "${substring}" after ${timeoutMs}ms`)
+            return cy.wait(interval).then(() => attempt()) as any
+        })
+    }
+    return attempt()
+}
+
 // Assert NO active default vanity for a language (used for SMART mode checks)
 export const assertNoVanityUrlChange = (path: string, language: string, expectedUrl: string) => {
     getVanityUrls(path).then((resp: any) => {

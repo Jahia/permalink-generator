@@ -11,6 +11,7 @@ describe('Scenario 5 — Force Regeneration', () => {
     beforeEach(() => {
         cy.login()
         cy.visit(adminUrl())
+        cy.get('#permalink-generator-root', {timeout: 30000}).should('exist')
     })
 
     it('Force Regeneration panel is visible', () => {
