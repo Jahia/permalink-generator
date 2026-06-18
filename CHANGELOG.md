@@ -18,7 +18,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - **`jmix:permalinkExcluded` mixin** — editors can exclude a single page from automatic vanity generation directly in Content Editor without touching site settings.
 - **Excluded paths — bypass option** — Force Regen panel exposes an *Include excluded paths* toggle to override the site's excluded-paths list for a single operation.
 - **Pill color legend** — collapsible help overlay in both Audit and Regen panels explaining each pill state.
-- **Translations** — DE, ES, IT, PT added (EN and FR were already present).
+- **Translations** — full UI translated in EN, FR, DE, ES, IT, PT.
 - **Cypress E2E test suite** — 6 scenarios, 30 tests: setup/teardown, SMART mode, title rename, audit panel, force-regen (SMART vs FORCE), manual vanity preservation.
 
 ---
