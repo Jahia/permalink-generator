@@ -8,17 +8,33 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [2.0.0] — 2026-06-18
 
-> **Complete rewrite.** The module has been rebuilt from the ground up. The admin panel, service layer, and i18n stack are entirely new. Review the [README](README.md) before upgrading.
+> **Complete rewrite.** Version 1.0.x was a background-only module with a single Drools rule and no admin interface. Every feature listed below is new.
 
 ### Added
 
-- **Force Regeneration panel** — bulk preview and apply vanity URL regeneration across the entire site. Displays stale, manual, and missing vanities before writing anything. Confirm modal and per-page result report with previous/new URL columns. Smart scan filter: only nodes where the computed URL actually differs are listed.
-- **Cascading prefix update for manual vanities** — when a parent page is renamed or moved, manual vanities on child pages receive a prefix-only update; the editor's slug after the last `/` is preserved.
+**Core behaviour**
+
+- **SMART mode** — module never overwrites a manually-set vanity URL. When a page is renamed or moved, only the path prefix is updated; the editor's slug is preserved.
+- **FORCE mode** — module always applies the computed URL, replacing manual vanities (which are kept as redirects).
+- **`jmix:permalinkGenerated` mixin** — auto-generated vanity nodes are tagged to distinguish them from manually-created ones. Absence of the mixin means "manual".
+- **Rename and move rules** — vanities are recomputed when `jcr:title` changes or a page is moved; all descendant vanities are updated in cascade.
+- **Delete rule** — vanities are deactivated (not deleted) when their page is deleted; existing links keep working.
+- **Copy rule** — `jmix:permalinkGenerated` is stripped from copied pages so fresh vanities are generated independently.
+- **Manual-edit detection** — when an editor writes `j:url` directly on a vanity node, `jmix:permalinkGenerated` is removed so the vanity is treated as manual from that point on.
 - **Vanity undelete** — when the module recomputes the same URL as an existing inactive auto-generated vanity, it re-promotes that vanity instead of creating a duplicate.
-- **`jmix:permalinkExcluded` mixin** — editors can exclude a single page from automatic vanity generation directly in Content Editor without touching site settings.
-- **Excluded paths — bypass option** — Force Regen panel exposes an *Include excluded paths* toggle to override the site's excluded-paths list for a single operation.
-- **Pill color legend** — collapsible help overlay in both Audit and Regen panels explaining each pill state.
-- **Translations** — full UI translated in EN, FR, DE, ES, IT, PT.
+- **`jmix:permalinkExcluded` mixin** — editors can exclude a single page from automatic vanity generation directly in Content Editor.
+- **Excluded paths** — site-level JCR path list; the module skips all nodes under these subtrees.
+
+**Admin panel** *(did not exist in 1.0.x)*
+
+- **Missing Permalink Audit** — lists pages that have no vanity URL per language; supports bulk selection and generation.
+- **Force Regeneration** — scans the entire site and previews which URLs would change (stale, manual, or missing) before writing anything. Confirm modal and per-page result report with previous/new URL columns. Smart filter: only nodes where the computed URL actually differs are listed.
+- **SMART / FORCE mode toggle** — stored per site; controls all background and bulk operations.
+- **Pill color legend** — collapsible help overlay in both panels explaining each pill state.
+- **Translations** — full UI in EN, FR, DE, ES, IT, PT.
+
+**Testing**
+
 - **Cypress E2E test suite** — 6 scenarios, 30 tests: setup/teardown, SMART mode, title rename, audit panel, force-regen (SMART vs FORCE), manual vanity preservation.
 
 ---
@@ -28,4 +44,3 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Fixed
 
 - Vanity URL generation is now skipped for file nodes (`jnt:file` and subtypes). Previously the module attempted to generate vanities for binary content, which produced incorrect URLs.
-
