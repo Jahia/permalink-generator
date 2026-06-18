@@ -28,7 +28,7 @@ export default function SiteSettings({ contextPath, sitePath, currentMode, exclu
                     setStatus({ ok: true, msg: '✓ ' + i18n.save });
                 }
             })
-            .catch(e => setStatus({ ok: false, msg: e.message || 'Error' }))
+            .catch(e => setStatus({ ok: false, msg: e.message || i18n.saveError }))
             .finally(() => setSaving(false));
     }
 
@@ -70,7 +70,7 @@ export default function SiteSettings({ contextPath, sitePath, currentMode, exclu
                             id="excludedPaths"
                             className="input-xlarge"
                             rows={5}
-                            placeholder="/sites/mysite/contents/legacy"
+                            placeholder={i18n.exclPlaceholder}
                             style={{ fontFamily: 'monospace', fontSize: 12 }}
                             value={paths}
                             onChange={e => setPaths(e.target.value)}

@@ -35,9 +35,26 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Creates and maintains permanent vanity URLs for pages and displayable content (jmix:renderableMainResource).
- * Auto-generated vanities are tagged with jmix:permalinkGenerated to distinguish
- * them from manually-created vanities, which are never touched.
+ * OSGi service that creates and maintains permanent vanity URLs for pages and renderable content.
+ *
+ * <p>All module-generated vanities carry the {@code jmix:permalinkGenerated} mixin, which allows
+ * the service to distinguish them from manually-created vanities. Manual vanities are never
+ * overwritten in SMART mode.</p>
+ *
+ * <p>Entry points consumed by Drools rules ({@code rules.drl}):
+ * <ul>
+ *   <li>{@link #addVanity} — fired when {@code jcr:title} is set</li>
+ *   <li>{@link #onNodeMoved} — fired on node move</li>
+ *   <li>{@link #onNodeDeleted} — fired on node deletion</li>
+ *   <li>{@link #removePermalinkMixin} — fired when an editor manually edits a vanity URL</li>
+ *   <li>{@link #stripCopiedVanities} — fired on node copy</li>
+ * </ul>
+ *
+ * <p>Bulk API consumed by {@code GeneratePermalinksAction}:
+ * <ul>
+ *   <li>{@link #previewVanityForNodeIds} — compute what would change without persisting</li>
+ *   <li>{@link #generateVanityForNodeIds} — apply computed vanities, optionally overwriting manual ones</li>
+ * </ul>
  */
 @Component(service = PermalinkGeneratorService.class)
 public class PermalinkGeneratorService {
@@ -71,7 +88,7 @@ public class PermalinkGeneratorService {
     // Drools entry points
     // -------------------------------------------------------------------------
 
-    /** jcr:title set — create/update vanity for node and propagate to descendants. */
+    /** Drools entry point: {@code jcr:title} was set — create or update the vanity URL for the node. */
     public void addVanity(final AddedNodeFact nodeFact, final String language, KnowledgeHelper drools) throws Exception {
         if (language == null) return;
         try {
@@ -88,7 +105,7 @@ public class PermalinkGeneratorService {
         }
     }
 
-    /** Node moved — update vanity for the node and all descendants across all languages. */
+    /** Drools entry point: node was moved — update vanity URLs for the node and all descendants. */
     public void onNodeMoved(final MovedNodeFact nodeFact, KnowledgeHelper drools) throws Exception {
         try {
             JCRSiteNode site = nodeFact.getNode().getResolveSite();
@@ -104,7 +121,7 @@ public class PermalinkGeneratorService {
         }
     }
 
-    /** Node deleted — deactivate published vanities, delete unpublished ones. */
+    /** Drools entry point: node was deleted — remove all auto-generated vanity URLs for the node. */
     public void onNodeDeleted(final DeletedNodeFact nodeFact, KnowledgeHelper drools) throws Exception {
         try {
             JCRSessionWrapper session = JCRSessionFactory.getInstance().getCurrentSystemSession(Constants.EDIT_WORKSPACE, null, null);
@@ -125,10 +142,7 @@ public class PermalinkGeneratorService {
         }
     }
 
-    /**
-     * Editor manually changed j:url on a auto-generated vanity — remove the mixin so the
-     * vanity is treated as manual from now on and never overwritten by the module.
-     */
+    /** Drools entry point: editor changed {@code j:url} directly — strip {@code jmix:permalinkGenerated} so the vanity is treated as manual. */
     public void removePermalinkMixin(final AddedNodeFact nodeFact, KnowledgeHelper drools) throws Exception {
         try {
             JCRNodeWrapper vanityNode = nodeFact.getNode();
@@ -142,7 +156,7 @@ public class PermalinkGeneratorService {
         }
     }
 
-    /** Page copied — strip inherited auto-generated vanities so fresh ones are computed from title. */
+    /** Drools entry point: node was copied — remove module-managed vanities from the copy so they are regenerated fresh. */
     public void stripCopiedVanities(final CopiedNodeFact nodeFact, KnowledgeHelper drools) throws Exception {
         try {
             JCRSessionWrapper session = JCRSessionFactory.getInstance().getCurrentSystemSession(Constants.EDIT_WORKSPACE, null, null);
@@ -678,22 +692,15 @@ public class PermalinkGeneratorService {
     // -------------------------------------------------------------------------
 
     /**
-     * Generate vanity URLs for a list of node UUIDs across the given languages.
-     * Skips nodes that cannot be found or are excluded by site configuration.
-     * Returns the number of (node × language) pairs processed.
-     */
-    /**
-     * Preview mode: compute what would happen per node×language without making any changes.
+     * Compute what vanity URLs would be generated for the given nodes without persisting any change.
+     * Used by the admin UI to preview before applying.
      *
-     * Optimised for large sites:
-     *  - Nodes sorted by path depth so parents are always evaluated before their children.
-     *  - One JCR session opened per language (not per node×language).
-     *  - computedUrlCache lets each child reuse its parent's freshly-computed URL (cascade),
-     *    giving the correct final state when the entire selected subtree is regenerated.
-     *  - currentVanityCache loads all active+default vanities for a node in one pass,
-     *    shared across all language iterations (no repeated JCR child-node scans).
-     *
-     * @param bypassExcluded when true, skips the isExcludedPath check (mirrors the bypass checkbox)
+     * @param nodeIds   UUIDs of the nodes to preview
+     * @param languages language codes (e.g. {@code ["en", "fr"]})
+     * @param session   JCR session — used only for read access
+     * @param bypassExcluded if {@code true}, ignored excluded-path settings
+     * @return one map per node×language with keys {@code uuid}, {@code path}, {@code language},
+     *         {@code computedUrl}, {@code currentUrl}, {@code willChange}, {@code isManual}
      */
     public List<Map<String, String>> previewVanityForNodeIds(
             List<String> nodeIds, List<String> languages,
@@ -776,11 +783,15 @@ public class PermalinkGeneratorService {
     }
 
     /**
-     * Generate (or force-regenerate) vanity URLs for the given nodes.
+     * Apply computed vanity URLs for the given nodes and languages, persisting the result to JCR.
      *
-     * Nodes are processed shallowest-first so that a parent's new vanity is committed to JCR
-     * before its children are evaluated — the child's computeVanityUrl reads the parent's
-     * updated URL automatically from the same shared session.
+     * @param nodeIds    UUIDs of the nodes to process (depth-sorted internally)
+     * @param languages  language codes (e.g. {@code ["en", "fr"]})
+     * @param session    JCR session passed to helpers (a locale session is opened per language internally)
+     * @param forceRegen if {@code true}, overwrite even manually-set vanity URLs; if {@code false},
+     *                   SMART mode applies — manual vanities are preserved
+     * @return one map per generated/updated node×language with keys {@code uuid}, {@code path},
+     *         {@code language}, {@code action}, {@code url}, {@code oldUrl}
      */
     public List<Map<String, String>> generateVanityForNodeIds(
             List<String> nodeIds, List<String> languages,

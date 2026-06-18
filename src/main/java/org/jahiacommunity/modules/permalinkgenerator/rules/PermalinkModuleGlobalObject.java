@@ -9,6 +9,10 @@ import org.osgi.service.component.annotations.Reference;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Registers {@link PermalinkGeneratorService} as a Drools global variable named
+ * {@code permalinkGeneratorService}, making it available inside {@code rules.drl}.
+ */
 @Component(service = ModuleGlobalObject.class, immediate = true)
 public class PermalinkModuleGlobalObject extends ModuleGlobalObject {
 

@@ -397,7 +397,7 @@ export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths
                                                     type="checkbox"
                                                     checked={rowChecked}
                                                     disabled={row.isHomePage}
-                                                    aria-label={row.isHomePage ? 'Homepage — skipped' : row.path}
+                                                    aria-label={row.isHomePage ? i18n.homepageAria : row.path}
                                                     onChange={e => toggleRow(row.uuid, e.target.checked)}
                                                 />
                                             </td>

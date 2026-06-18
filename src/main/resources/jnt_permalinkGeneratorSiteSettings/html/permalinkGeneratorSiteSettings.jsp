@@ -66,6 +66,14 @@
 <fmt:message key="permalinkgenerator.regen.report.promoted"    var="i18n_reportPromoted"/>
 <fmt:message key="permalinkgenerator.regen.report.already_correct" var="i18n_reportCorrect"/>
 <fmt:message key="permalinkgenerator.legend.help"              var="i18n_legendHelp"/>
+<fmt:message key="permalinkgenerator.audit.homepage.aria"  var="i18n_homepageAria"/>
+<fmt:message key="permalinkgenerator.regen.report.col.lang"    var="i18n_reportColLang"/>
+<fmt:message key="permalinkgenerator.regen.report.col.path"    var="i18n_reportColPath"/>
+<fmt:message key="permalinkgenerator.regen.report.col.action"  var="i18n_reportColAction"/>
+<fmt:message key="permalinkgenerator.regen.report.col.oldUrl"  var="i18n_reportColOldUrl"/>
+<fmt:message key="permalinkgenerator.regen.report.col.newUrl"  var="i18n_reportColNewUrl"/>
+<fmt:message key="permalinkgenerator.excludedPaths.placeholder" var="i18n_exclPlaceholder"/>
+<fmt:message key="permalinkgenerator.save.error"               var="i18n_saveError"/>
 
 <c:set var="currentMode" value="${renderContext.site.hasProperty('j:permalinkGeneratorMode') ? renderContext.site.getProperty('j:permalinkGeneratorMode').string : 'SMART'}"/>
 
@@ -136,7 +144,15 @@ window.__PL_CONFIG__ = {
         reportCreated:  '${fn:escapeXml(i18n_reportCreated)}',
         reportPromoted: '${fn:escapeXml(i18n_reportPromoted)}',
         reportCorrect:  '${fn:escapeXml(i18n_reportCorrect)}',
-        legendHelp:     '${fn:escapeXml(i18n_legendHelp)}'
+        legendHelp:     '${fn:escapeXml(i18n_legendHelp)}',
+        homepageAria:   '${fn:escapeXml(i18n_homepageAria)}',
+        reportColLang:   '${fn:escapeXml(i18n_reportColLang)}',
+        reportColPath:   '${fn:escapeXml(i18n_reportColPath)}',
+        reportColAction: '${fn:escapeXml(i18n_reportColAction)}',
+        reportColOldUrl: '${fn:escapeXml(i18n_reportColOldUrl)}',
+        reportColNewUrl: '${fn:escapeXml(i18n_reportColNewUrl)}',
+        exclPlaceholder: '${fn:escapeXml(i18n_exclPlaceholder)}',
+        saveError:       '${fn:escapeXml(i18n_saveError)}'
     }
 };
 window.__PL_CONFIG__.actionUrl = window.location.pathname.replace(/\.[^/]+\.html$/, '') + '.generatePermalinks.do';

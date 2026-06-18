@@ -11,13 +11,33 @@
     <name>Permalink Generator</name>
     <version>2.0.0-SNAPSHOT</version>
     <packaging>bundle</packaging>
-    <description>Permalink Generator will generate permalink for your displayable contents</description>
+    <description>Automatically generates and maintains vanity URLs (permanent links) for pages and renderable content in Jahia. Module-generated vanities are tagged with jmix:permalinkGenerated to coexist safely with manually-set URLs.</description>
     <scm>
         <connection>scm:git:git@github.com:Jahia/permalink-generator.git</connection>
         <developerConnection>scm:git:git@github.com:Jahia/permalink-generator.git</developerConnection>
         <url>https://github.com/Jahia/permalink-generator.git</url>
       <tag>HEAD</tag>
   </scm>
+    <licenses>
+        <license>
+            <name>MIT License</name>
+            <url>https://opensource.org/licenses/MIT</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+    <developers>
+        <developer>
+            <id>pvollenweider</id>
+            <name>Philippe Vollenweider</name>
+            <email>pvollenweider@jahia.com</email>
+            <organization>Jahia</organization>
+            <organizationUrl>https://www.jahia.com</organizationUrl>
+        </developer>
+    </developers>
+    <organization>
+        <name>Jahia Community</name>
+        <url>https://github.com/jahia-community</url>
+    </organization>
     <repositories>
         <repository>
             <id>jahia-public</id>

@@ -513,7 +513,7 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
                                                     type="checkbox"
                                                     checked={rowChecked}
                                                     disabled={row.isHomePage}
-                                                    aria-label={row.isHomePage ? 'Homepage — skipped' : row.path}
+                                                    aria-label={row.isHomePage ? i18n.homepageAria : row.path}
                                                     onChange={e => toggleRow(row.uuid, e.target.checked)}
                                                 />
                                             </td>
@@ -589,11 +589,11 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
                                 <table className="pl-audit-table" style={{ fontSize: 11 }}>
                                     <thead>
                                         <tr>
-                                            <th style={{ width: 44 }}>Lang</th>
-                                            <th>Path</th>
-                                            <th>Action</th>
-                                            {hasOldUrls && <th>Previous vanity</th>}
-                                            <th>New vanity</th>
+                                            <th style={{ width: 44 }}>{i18n.reportColLang}</th>
+                                            <th>{i18n.reportColPath}</th>
+                                            <th>{i18n.reportColAction}</th>
+                                            {hasOldUrls && <th>{i18n.reportColOldUrl}</th>}
+                                            <th>{i18n.reportColNewUrl}</th>
                                         </tr>
                                     </thead>
                                     <tbody>

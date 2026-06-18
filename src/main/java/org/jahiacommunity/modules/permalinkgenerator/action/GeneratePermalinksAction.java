@@ -20,6 +20,21 @@ import javax.servlet.http.HttpServletResponse;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Jahia action ({@code *.generatePermalinks.do}) that applies or previews vanity URL generation
+ * for a set of JCR nodes.
+ *
+ * <p>Accepts POST requests with parameters:
+ * <ul>
+ *   <li>{@code nodeIds[]} — UUIDs of the nodes to process</li>
+ *   <li>{@code languages[]} — language codes to process</li>
+ *   <li>{@code preview=true} — if present, returns a preview without persisting (optional)</li>
+ *   <li>{@code force=true} — if present with non-preview, overwrites manual vanities (optional)</li>
+ *   <li>{@code bypassExcluded=true} — if present, ignores excluded-path settings (optional)</li>
+ * </ul>
+ *
+ * <p>Returns JSON: {@code {"results": [...]}} on success, {@code {"error": "..."}} on failure.
+ */
 @Component(service = Action.class, immediate = true)
 public class GeneratePermalinksAction extends Action {
 
