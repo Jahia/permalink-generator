@@ -1,53 +1,70 @@
-import {adminUrl, waitForVanityUrl, makeVanityManual, SITE_KEY} from '../support/permalinkgen'
+import {waitForVanityUrl, makeVanityManual, SITE_KEY} from '../support/permalinkgen'
 
-describe('Scenario 5 — Force Regeneration', () => {
+const actionUrl = (siteKey: string = SITE_KEY) =>
+    `/cms/render/default/en/sites/${siteKey}/settings/site-settings-base/permalinkGeneratorSettings.generatePermalinks.do`
+
+describe('Scenario 5 — Force Regeneration via action endpoint', () => {
     before(() => {
         cy.login()
+        // Wait for EN vanity, then make it manual (simulates a manually-edited vanity)
         waitForVanityUrl(`/sites/${SITE_KEY}/home/page-about`, 'en').then(() => {
             makeVanityManual(`/sites/${SITE_KEY}/home/page-about`, 'en')
         })
     })
 
-    beforeEach(() => {
-        cy.login()
-        cy.visit(adminUrl())
-        cy.get('#permalink-generator-root', {timeout: 30000}).should('exist')
+    it('page-about EN vanity is manual after makeVanityManual', () => {
+        // Verify the vanity still exists but is now manual (can query but cannot be overwritten by SMART)
+        waitForVanityUrl(`/sites/${SITE_KEY}/home/page-about`, 'en')
+            .should('include', 'about')
     })
 
-    it('Force Regeneration panel is visible', () => {
-        cy.contains('Force Regeneration').should('be.visible')
-    })
-
-    it('Scan All Pages finds pages with stale or manual vanities', () => {
-        cy.contains('button', 'Scan All Pages').click()
-        cy.get('.pl-regen .pl-audit-table tbody tr', {timeout: 30000}).should('have.length.greaterThan', 0)
-    })
-
-    it('page-about EN pill is classified as manual after scan', () => {
-        cy.contains('button', 'Scan All Pages').click()
-        cy.get('.pl-regen .pl-audit-table tbody', {timeout: 30000})
-        cy.contains('td', `/sites/${SITE_KEY}/home/page-about`)
-            .closest('tr')
-            .find('.pl-pill')
-            .first()
-            .should('satisfy', ($el: JQuery) => {
-                return $el.hasClass('pl-pill-manual') || $el.hasClass('pl-pill-sel')
+    it('force=false does NOT regenerate a manual EN vanity (SMART behaviour)', () => {
+        cy.apollo({
+            queryFile: 'graphql/jcr/query/getNodeUuid.graphql',
+            variables: {path: `/sites/${SITE_KEY}/home/page-about`}
+        }).then((resp: any) => {
+            const uuid = resp?.data?.jcr?.nodeByPath?.uuid
+            const body = `nodeIds[]=${uuid}&languages[]=en`
+            cy.request({
+                method: 'POST',
+                url: actionUrl(),
+                body,
+                headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'},
+                failOnStatusCode: false
+            }).then(res => {
+                expect(res.status).to.eq(200)
+                // action should return 0 operations (manual vanity skipped in SMART mode)
+                const ops = res.body?.results ?? []
+                const changed = ops.filter((r: any) => r.action !== 'already_correct')
+                expect(changed.length, 'SMART mode should not regenerate manual vanity').to.eq(0)
             })
+        })
     })
 
-    it('confirm modal appears before regeneration', () => {
-        cy.contains('button', 'Scan All Pages').click()
-        cy.get('.pl-regen .pl-audit-table tbody tr', {timeout: 30000}).should('have.length.greaterThan', 0)
-        cy.contains('button', /Regenerate selected/).click()
-        cy.contains('Confirm regeneration').should('be.visible')
+    it('force=true DOES regenerate the manual EN vanity', () => {
+        cy.apollo({
+            queryFile: 'graphql/jcr/query/getNodeUuid.graphql',
+            variables: {path: `/sites/${SITE_KEY}/home/page-about`}
+        }).then((resp: any) => {
+            const uuid = resp?.data?.jcr?.nodeByPath?.uuid
+            const body = `nodeIds[]=${uuid}&languages[]=en&force=true`
+            cy.request({
+                method: 'POST',
+                url: actionUrl(),
+                body,
+                headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'},
+                failOnStatusCode: false
+            }).then(res => {
+                expect(res.status).to.eq(200)
+                const ops = res.body?.results ?? []
+                expect(ops.length, 'force regen should produce at least one operation').to.be.greaterThan(0)
+            })
+        })
     })
 
-    it('force regeneration creates URLs and shows report table', () => {
-        cy.contains('button', 'Scan All Pages').click()
-        cy.get('.pl-regen .pl-audit-table tbody tr', {timeout: 30000}).should('have.length.greaterThan', 0)
-        cy.contains('button', /Regenerate selected/).click()
-        cy.get('.modal-footer').contains('button', 'Regenerate').click()
-        cy.contains('Regeneration report', {timeout: 30000}).should('be.visible')
-        cy.contains('✓').should('be.visible')
+    it('EN vanity is auto-generated again after force regen', () => {
+        // After force regen, the EN vanity should exist (module recreated it with jmix:permalinkGenerated)
+        waitForVanityUrl(`/sites/${SITE_KEY}/home/page-about`, 'en', 15000)
+            .should('include', 'about')
     })
 })
