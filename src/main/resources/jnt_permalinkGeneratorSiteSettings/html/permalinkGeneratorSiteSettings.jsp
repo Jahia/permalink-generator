@@ -73,6 +73,7 @@
 <script>
 window.__PL_CONFIG__ = {
     contextPath: '${pageContext.request.contextPath}',
+    csrfToken: '${fn:escapeXml(sessionScope.OWASP_CSRFTOKEN)}',
     sitePath: '${fn:escapeXml(renderContext.site.path)}',
     currentMode: '${fn:escapeXml(currentMode)}',
     siteLangs: [<c:forEach items="${renderContext.site.languages}" var="_l" varStatus="_ls"><c:if test="${!_ls.first}">,</c:if>'${fn:escapeXml(_l)}'</c:forEach>],
