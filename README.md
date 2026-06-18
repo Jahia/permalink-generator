@@ -6,11 +6,24 @@
 
 Automatically generates and maintains permanent vanity URLs for Jahia pages and displayable content. Module-generated vanities are tagged with `jmix:permalinkGenerated` to distinguish them from manually-set ones, enabling coexistence of automatic and editorial URL strategies.
 
+- [Background](#background)
 - [For editors](#for-editors)
 - [For site administrators](#for-site-administrators)
 - [For system administrators](#for-system-administrators)
 - [For developers](#for-developers)
 - [Changelog](CHANGELOG.md)
+
+---
+
+## Background
+
+A website has a life of its own. Pages are created, renamed, moved, and restructured as content evolves. Without intervention, every one of those changes produces a broken URL somewhere — a 404 for content that still exists, just at a different address.
+
+The core idea behind this module is that the URL of a page should be derived from its title, kept consistent with SEO best practices (lowercase, hyphenated slugs), and — critically — *maintained automatically* as the site evolves. Editors should never have to think about vanity URLs. They should just exist and stay correct.
+
+Early versions handled creation only: a vanity URL was generated when a page was first given a title. Renames, moves, and tree restructures were not handled, leaving stale URLs behind. Version 2.0 closes that gap: every lifecycle event (rename, move, delete, copy) is now handled, and a full admin panel lets site administrators audit and control the state of all vanity URLs across the site.
+
+The module also handles a particularly interesting edge case: **manual vanities propagate to children automatically**. If an editor explicitly sets a page's vanity URL to `/blog`, all pages under that section will inherit `/blog` as their prefix — even if the page sits at a different level in the actual JCR tree. This creates a hybrid model where manual editorial decisions coexist with automatic generation: the module respects and builds on what editors choose, rather than overriding it.
 
 ---
 
