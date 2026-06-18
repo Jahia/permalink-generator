@@ -14,6 +14,15 @@ function isExcludedBySettings(nodePath, excludedPaths) {
     return excludedPaths.some(ep => ep && nodePath.startsWith(ep));
 }
 
+function LegendItem({ cls, label }) {
+    return (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+            <span className={'pl-pill ' + cls} style={{ cursor: 'default', pointerEvents: 'none' }}>XX</span>
+            <span style={{ color: '#555' }}>{label}</span>
+        </span>
+    );
+}
+
 function ConfirmModal({ show, i18n, onCancel, onConfirm }) {
     if (!show) return null;
     return (
@@ -355,6 +364,15 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
 
             <h3>{i18n.regenTitle}</h3>
             <p className="text-muted">{i18n.regenDesc}</p>
+
+            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', margin: '8px 0 16px', fontSize: 12 }}>
+                <LegendItem cls="pl-pill-miss"   label={i18n.pillMissing} />
+                <LegendItem cls="pl-pill-stale"  label={i18n.pillStale} />
+                <LegendItem cls="pl-pill-manual" label={i18n.pillManual} />
+                <LegendItem cls="pl-pill-has"    label={i18n.pillHasForce} />
+                <LegendItem cls="pl-pill-sel"    label={i18n.pillSelForce} />
+                <LegendItem cls="pl-pill-gen"    label={i18n.pillGenerated} />
+            </div>
 
             <div className="control-group">
                 <div className="controls" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>

@@ -14,6 +14,15 @@ function isExcludedBySettings(nodePath, excludedPaths) {
     return excludedPaths.some(ep => ep && nodePath.startsWith(ep));
 }
 
+function LegendItem({ cls, label }) {
+    return (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+            <span className={'pl-pill ' + cls} style={{ cursor: 'default', pointerEvents: 'none' }}>XX</span>
+            <span style={{ color: '#555' }}>{label}</span>
+        </span>
+    );
+}
+
 export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths, actionUrl, i18n }) {
     const [scanPath, setScanPath] = useState(sitePath);
     const [scanning, setScanning] = useState(false);
@@ -266,6 +275,13 @@ export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths
         <div className="pl-audit">
             <h3>{i18n.auditTitle}</h3>
             <p className="text-muted">{i18n.auditDesc}</p>
+
+            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', margin: '8px 0 16px', fontSize: 12 }}>
+                <LegendItem cls="pl-pill-miss" label={i18n.pillMissing} />
+                <LegendItem cls="pl-pill-sel"  label={i18n.pillSelected} />
+                <LegendItem cls="pl-pill-has"  label={i18n.pillExisting} />
+                <LegendItem cls="pl-pill-gen"  label={i18n.pillGenerated} />
+            </div>
 
             <div className="control-group">
                 <label className="control-label" htmlFor="plAuditPath" style={{ fontWeight: 'bold' }}>
