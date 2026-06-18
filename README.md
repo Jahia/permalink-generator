@@ -1,4 +1,8 @@
-# permalink-generator
+# Permalink Generator
+
+[![Jahia 8.x](https://img.shields.io/badge/Jahia-8.x-blue)](https://www.jahia.com)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Jahia Store](https://img.shields.io/badge/Jahia%20Store-permalink--generator-brightgreen)](https://store.jahia.com/contents/modules-repository/org/jahia/community/permalink-generator.html)
 
 Automatically generates and maintains permanent vanity URLs for Jahia pages and displayable content. Module-generated vanities are tagged with `jmix:permalinkGenerated` to distinguish them from manually-set ones, enabling coexistence of automatic and editorial URL strategies.
 
@@ -6,6 +10,7 @@ Automatically generates and maintains permanent vanity URLs for Jahia pages and 
 - [For site administrators](#for-site-administrators)
 - [For system administrators](#for-system-administrators)
 - [For developers](#for-developers)
+- [Changelog](CHANGELOG.md)
 
 ---
 
