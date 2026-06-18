@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [2.0.0] — 2026-06-18
 
+The goal of this module has always been that editors should never have to think about vanity URLs — they should just exist and stay correct as the site evolves. Version 1.0.x achieved this for the creation case only. The gap was everything that happens *after* a page is created: renames, moves, restructures. Every one of those operations left a stale URL behind. Version 2.0.0 closes that gap entirely, and adds a full admin panel so site administrators can audit and control vanity URL state across the site at any time.
+
 ### Upgrading from 1.0.x
 
 Version 1.0.x ran entirely in the background: it generated a vanity URL when a page title was set, and nothing else. There was no admin panel and no configuration.
