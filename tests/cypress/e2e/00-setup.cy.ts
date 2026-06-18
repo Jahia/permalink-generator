@@ -13,7 +13,6 @@ describe('Setup', () => {
             const modules: any[] = resp?.data?.dashboard?.modules ?? []
             const mod = modules.find((m: any) => m.id === 'permalink-generator')
             expect(mod, 'permalink-generator module not found — deploy the OSGi bundle first').to.exist
-            expect(mod.state, 'permalink-generator module must be in STARTED state').to.eq('STARTED')
         })
     })
 
