@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Permalink Generator — Test Harness</title>
+    <script>
+        window.__PL_CONFIG__ = {
+            contextPath: '',
+            sitePath: '/sites/testsite',
+            siteLangs: ['en', 'fr'],
+            excludedPaths: [],
+            currentMode: 'SMART',
+            actionUrl: '/testsite.generatePermalinks.do',
+            i18n: {
+                title: 'Permalink Generator',
+                desc: 'Configure how vanity URLs are automatically generated...',
+                modeLabel: 'Vanity URL mode',
+                modeSmart: 'Smart (recommended)',
+                modeSmartHelp: 'The module creates vanity URLs for new and renamed pages...',
+                modeForce: 'Force',
+                modeForceHelp: 'The module always applies its rules...',
+                save: 'Save',
+                cancel: 'Cancel',
+                exclLabel: 'Excluded paths',
+                exclHelp: 'One JCR path per line...',
+                auditTitle: 'Missing Permalink Audit',
+                auditDesc: 'Find pages without a vanity URL...',
+                auditStartPath: 'Start path',
+                auditScan: 'Scan',
+                auditGenerate: 'Generate permalinks',
+                auditSelectAll: 'Select / deselect all missing',
+                auditColPath: 'Path',
+                auditLoadMore: 'Load 100 more',
+                pathRequired: 'Path must start with /sites/',
+                scanRunning: 'Scanning…',
+                errorGraphql: 'GraphQL error: {0}',
+                errorNetwork: 'Error: {0}',
+                scanned: '{0} pages scanned — {1} with at least one missing permalink',
+                allGood: '✓ {0} pages scanned — all permalinks up to date',
+                loadMoreSt: '{0} pages scanned, {1} missing found',
+                summary: '{0} page(s) with at least one missing permalink',
+                genSuccess: '✓ {0} permalink(s) generated',
+                genZero: '0 permalinks generated — check server logs',
+                genError: 'HTTP {0} ({1}) — check server logs',
+                pillGenerated: 'Generated',
+                pillExisting: 'Vanity exists',
+                pillSelected: 'Selected — click to deselect',
+                pillMissing: 'Missing — click to select',
+                colLangTitle: '{0} — click to select/deselect all',
+                pillNoTitle: 'No title — node name used as slug',
+                pillHasForce: 'Has vanity — click to select for regeneration',
+                pillSelForce: 'Selected — click to deselect',
+                pillStale: 'URL would change — auto-selected, click to deselect',
+                pillManual: 'Manually set — regeneration would replace this URL',
+                regenTitle: 'Force Regeneration',
+                regenDesc: 'Apply the module’s computed vanity URLs...',
+                regenScan: 'Scan All Pages',
+                regenBypass: 'Include excluded paths',
+                regenGenerate: 'Regenerate selected',
+                regenSummary: '{0} page(s) listed',
+                regenSuccess: '✓ {0} vanity URL(s) regenerated',
+                regenZero: '0 URLs regenerated — check server logs',
+                regenError: 'HTTP {0} ({1}) — check server logs',
+                regenScanned: '{0} pages scanned — {1} listed',
+                confirmTitle: 'Confirm regeneration',
+                confirmBody: 'This will overwrite existing vanity URLs...',
+                confirmProceed: 'Regenerate',
+                reportTitle: 'Regeneration report',
+                reportCreated: 'Created',
+                reportPromoted: 'Restored (existing vanity reactivated)',
+                reportCorrect: 'Already correct'
+            }
+        };
+    </script>
+</head>
+<body>
+    <div id="permalink-generator-root"></div>
+</body>
+</html>

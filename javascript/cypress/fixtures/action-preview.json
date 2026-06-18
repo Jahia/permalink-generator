@@ -1,0 +1,7 @@
+{
+  "results": [
+    { "uuid": "uuid-page-1", "language": "en", "willChange": true,  "isManual": false },
+    { "uuid": "uuid-page-1", "language": "fr", "willChange": false, "isManual": true  },
+    { "uuid": "uuid-page-2", "language": "fr", "willChange": true,  "isManual": false }
+  ]
+}

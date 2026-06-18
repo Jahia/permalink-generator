@@ -1,0 +1,33 @@
+{
+  "data": {
+    "jcr": {
+      "nodesByQuery": {
+        "nodes": [
+          {
+            "uuid": "uuid-page-1",
+            "path": "/sites/testsite/home/about",
+            "displayName": "About Us",
+            "isHomePage": null,
+            "vanityUrls": []
+          },
+          {
+            "uuid": "uuid-page-2",
+            "path": "/sites/testsite/home/contact",
+            "displayName": "Contact",
+            "isHomePage": null,
+            "vanityUrls": [
+              { "url": "/en/contact", "language": "en", "active": true, "default": true }
+            ]
+          },
+          {
+            "uuid": "uuid-home",
+            "path": "/sites/testsite/home",
+            "displayName": "Home",
+            "isHomePage": { "value": "true" },
+            "vanityUrls": []
+          }
+        ]
+      }
+    }
+  }
+}

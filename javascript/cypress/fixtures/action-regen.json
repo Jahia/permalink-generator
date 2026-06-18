@@ -1,0 +1,20 @@
+{
+  "results": [
+    {
+      "uuid": "uuid-page-1",
+      "path": "/sites/testsite/home/about",
+      "language": "en",
+      "action": "created",
+      "url": "/en/about-us",
+      "oldUrl": ""
+    },
+    {
+      "uuid": "uuid-page-1",
+      "path": "/sites/testsite/home/about",
+      "language": "fr",
+      "action": "created",
+      "url": "/fr/a-propos",
+      "oldUrl": ""
+    }
+  ]
+}
