@@ -8,43 +8,65 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [2.0.0] — 2026-06-18
 
-> **Complete rewrite.** Version 1.0.x was a background-only module with a single Drools rule and no admin interface. Every feature listed below is new.
+### Upgrading from 1.0.x
 
-### Added
+Version 1.0.x ran entirely in the background: it generated a vanity URL when a page title was set, and nothing else. There was no admin panel and no configuration.
 
-**Core behaviour**
+Version 2.0.0 is a complete rewrite. The background behaviour is preserved and significantly extended; a full admin panel is added; and the Spring service layer is replaced with OSGi Declarative Services.
 
-- **SMART mode** — module never overwrites a manually-set vanity URL. When a page is renamed or moved, only the path prefix is updated; the editor's slug is preserved.
-- **FORCE mode** — module always applies the computed URL, replacing manual vanities (which are kept as redirects).
-- **`jmix:permalinkGenerated` mixin** — auto-generated vanity nodes are tagged to distinguish them from manually-created ones. Absence of the mixin means "manual".
-- **Rename and move rules** — vanities are recomputed when `jcr:title` changes or a page is moved; all descendant vanities are updated in cascade.
-- **Delete rule** — vanities are deactivated (not deleted) when their page is deleted; existing links keep working.
-- **Copy rule** — `jmix:permalinkGenerated` is stripped from copied pages so fresh vanities are generated independently.
-- **Manual-edit detection** — when an editor writes `j:url` directly on a vanity node, `jmix:permalinkGenerated` is removed so the vanity is treated as manual from that point on.
-- **Vanity undelete** — when the module recomputes the same URL as an existing inactive auto-generated vanity, it re-promotes that vanity instead of creating a duplicate.
-- **`jmix:permalinkExcluded` mixin** — editors can exclude a single page from automatic vanity generation directly in Content Editor.
-- **Excluded paths** — site-level JCR path list; the module skips all nodes under these subtrees.
+**Existing auto-generated vanities are unaffected.** The module upgrades cleanly.
 
-**Admin panel** *(did not exist in 1.0.x — accessible via Site Settings → Permalink Generator)*
+---
 
-The module now ships a full administration UI reachable from **Site Settings → Permalink Generator**. From this single panel, site administrators can:
+### New admin panel — Site Settings → Permalink Generator
 
-- **Configure the generation mode** (SMART or FORCE) — stored per site, applies to all automatic and bulk operations.
-- **Define excluded paths** — JCR paths (one per line) whose subtrees are entirely skipped.
-- **Run the Missing Permalink Audit** — lists all pages that have no vanity URL per language; supports bulk selection and one-click generation.
-- **Run Force Regeneration** — scans the entire site and shows a live preview of exactly which URLs would change (stale, manual, or missing) before writing anything. Each row shows the previous and new URL. Confirm modal before any write; smart filter excludes nodes where nothing would change.
+The module now has a dedicated administration panel, accessible from **Site Settings → Permalink Generator**. It is the single place to configure the module and operate on vanity URLs in bulk.
 
-Additional UI details:
-- **Pill color legend** — collapsible help overlay in both panels explaining each pill state.
-- **Translations** — full UI in EN, FR, DE, ES, IT, PT.
+**Mode selection (SMART or FORCE)**
+
+Choose how the module handles pages that already have a vanity URL:
+
+| Mode | Behaviour |
+|------|-----------|
+| **SMART** *(default)* | Never overwrites a vanity URL that an editor set manually. On rename or move, only the path prefix is updated — the editor's slug is preserved. |
+| **FORCE** | Always applies the computed URL. Manual vanities are replaced and kept as redirects. |
+
+**Excluded paths**
+
+Enter JCR paths (one per line) to suppress automatic vanity generation for entire content subtrees. Individual pages can also be excluded directly in Content Editor via the `jmix:permalinkExcluded` mixin.
+
+**Missing Permalink Audit**
+
+Find all pages on the site that have no vanity URL, broken down by language. Select the ones you want to fix and generate their vanities in a single click. Useful when first enabling the module on an existing site.
+
+**Force Regeneration**
+
+Scan the entire site and preview exactly which vanity URLs would change — stale (slug differs from title), manual (set by an editor), or missing — before writing anything. Each row shows the current URL and what it would become. Deselect rows you want to keep, confirm, and the module applies only the selected changes. Old vanities are always kept as redirects.
+
+---
+
+### Extended background behaviour
+
+The following rules are new in 2.0.0. They fire automatically with no configuration required.
+
+- **Rename** — when a page title changes, the vanity URL is updated. The old URL is kept as a redirect.
+- **Move** — when a page moves in the tree, its vanity URL (and all descendant vanities) are updated to reflect the new path. Old URLs are kept as redirects.
+- **Delete** — when a page is deleted, its vanity URLs are deactivated so existing links continue to redirect rather than 404.
+- **Copy** — copied pages start with no auto-generated vanity; fresh ones are computed independently from the copy's own title.
+- **Manual vanity detection** — when an editor writes a vanity URL directly in the SEO tab, the module marks it as manual and will not overwrite it in SMART mode.
+- **Vanity undelete** — if the module computes a URL that matches an existing deactivated vanity, it reactivates that node instead of creating a duplicate.
+
+---
 
 ### Removed
 
-- **Spring framework dependency** — the service layer is now pure OSGi Declarative Services (`@Component` / `@Reference`). The `META-INF/spring/` wiring that was present in 1.0.x has been removed.
+- **Spring framework dependency** — the service is now a pure OSGi Declarative Services component. The `META-INF/spring/` wiring present in 1.0.x has been removed. Third-party bundles that imported the Spring bean must rebind to the OSGi service.
 
-**Testing**
+---
 
-- **Cypress E2E test suite** — 6 scenarios, 30 tests: setup/teardown, SMART mode, title rename, audit panel, force-regen (SMART vs FORCE), manual vanity preservation.
+### Testing
+
+- Cypress E2E test suite added — 6 scenarios, 30 tests covering setup/teardown, SMART mode, title rename, audit panel, force-regen (SMART vs FORCE), and manual vanity preservation.
 
 ---
 
