@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [2.0.0] — 2026-06-18
 
+> **Complete rewrite.** The module has been rebuilt from the ground up. The admin panel, service layer, and i18n stack are entirely new. Review the [README](README.md) before upgrading.
+
 ### Added
 
 - **Force Regeneration panel** — bulk preview and apply vanity URL regeneration across the entire site. Displays stale, manual, and missing vanities before writing anything. Confirm modal and per-page result report with previous/new URL columns. Smart scan filter: only nodes where the computed URL actually differs are listed.
