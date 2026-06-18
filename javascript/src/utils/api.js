@@ -1,5 +1,11 @@
 function csrfToken() {
-    return (window.__PL_CONFIG__ && window.__PL_CONFIG__.csrfToken) || '';
+    const fromCfg = window.__PL_CONFIG__ && window.__PL_CONFIG__.csrfToken;
+    if (fromCfg) return fromCfg;
+    // CSRFGuard 3.x JS API (injected by csrfguard.js)
+    if (window.OWASP_CSRFGUARD && typeof window.OWASP_CSRFGUARD.getTokenValue === 'function') {
+        return window.OWASP_CSRFGUARD.getTokenValue() || '';
+    }
+    return '';
 }
 
 export function gql(contextPath, body) {
