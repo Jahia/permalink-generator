@@ -99,6 +99,16 @@ export const createManualVanityUrl = (contentPath: string, language: string, url
     })
 }
 
+// Call PermalinkGeneratorService.generateVanityForNodeIds via Groovy (bypasses HTTP render context).
+// paths: array of JCR paths; langs: array of language codes; force: whether to overwrite manual vanities.
+export const generatePermalinks = (paths: string[], langs: string[], force = false) => {
+    cy.executeGroovy('groovy/permalinkgen/generatePermalinks.groovy', {
+        PATHS: paths.join(','),
+        LANGS: langs.join(','),
+        FORCE: String(force)
+    })
+}
+
 // Query vanity URLs for a node
 export const getVanityUrls = (path: string): Cypress.Chainable<any> => {
     return cy.apollo({
