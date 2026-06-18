@@ -140,4 +140,4 @@ window.__PL_CONFIG__ = {
 window.__PL_CONFIG__.actionUrl = window.location.pathname.replace(/\.[^/]+\.html$/, '') + '.generatePermalinks.do';
 </script>
 
-<template:addResources type="javascript" resources="permalink-generator-admin.js"/>
+<script src="${pageContext.request.contextPath}/modules/permalink-generator/javascript/permalink-generator-admin.js"></script>

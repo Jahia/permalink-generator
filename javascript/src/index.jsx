@@ -1,5 +1,8 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import PermalinkGeneratorApp from './PermalinkGeneratorApp';
-const cfg = window.__PL_CONFIG__;
-createRoot(document.getElementById('permalink-generator-root')).render(<PermalinkGeneratorApp {...cfg} />);
+document.addEventListener('DOMContentLoaded', () => {
+    const el = document.getElementById('permalink-generator-root');
+    if (!el) return;
+    createRoot(el).render(<PermalinkGeneratorApp {...window.__PL_CONFIG__} />);
+});
