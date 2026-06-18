@@ -107,7 +107,7 @@ export const waitForVanityUrl = (path: string, language: string, timeoutMs: numb
     const attempt = (): Cypress.Chainable<string | null> => {
         return getVanityUrls(path).then((resp: any) => {
             const vanities = resp?.data?.jcr?.nodeByPath?.vanityUrls ?? []
-            const match = vanities.find((v: any) => v.language === language && v.active && v.defaultMapping)
+            const match = vanities.find((v: any) => v.language === language && v.active && v.default)
             if (match) return match.url as string
             if (Date.now() >= end) throw new Error(`waitForVanityUrl: no active default vanity for [${language}] on ${path} after ${timeoutMs}ms`)
             return cy.wait(interval).then(() => attempt()) as any
@@ -120,7 +120,7 @@ export const waitForVanityUrl = (path: string, language: string, timeoutMs: numb
 export const assertNoVanityUrlChange = (path: string, language: string, expectedUrl: string) => {
     getVanityUrls(path).then((resp: any) => {
         const vanities = resp?.data?.jcr?.nodeByPath?.vanityUrls ?? []
-        const match = vanities.find((v: any) => v.language === language && v.active && v.defaultMapping)
+        const match = vanities.find((v: any) => v.language === language && v.active && v.default)
         expect(match, `Expected a vanity URL for [${language}] on ${path}`).to.exist
         expect(match.url, `Vanity URL should still be ${expectedUrl} (SMART mode should not overwrite manual)`).to.equal(expectedUrl)
     })

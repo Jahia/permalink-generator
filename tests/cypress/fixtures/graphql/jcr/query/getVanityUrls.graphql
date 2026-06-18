@@ -5,7 +5,7 @@ query getVanityUrls($path: String!) {
                 url
                 language
                 active
-                defaultMapping
+                default
             }
         }
     }
