@@ -16,3 +16,5 @@ buildNumber.properties
 /.claude/
 /.impeccable/
 /PRODUCT.md
+node/
+node_modules/
