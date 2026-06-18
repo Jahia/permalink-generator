@@ -31,17 +31,11 @@ Choose how the module handles pages that already have a vanity URL:
 | **SMART** *(default)* | Never overwrites a vanity URL that an editor set manually. On rename or move, only the path prefix is updated — the editor's slug is preserved. |
 | **FORCE** | Always applies the computed URL. Manual vanities are replaced and kept as redirects. |
 
-**Excluded paths**
+**Excluded paths** — Enter JCR paths (one per line) to suppress automatic generation for entire content subtrees. Individual pages can also be excluded in Content Editor via the `jmix:permalinkExcluded` mixin.
 
-Enter JCR paths (one per line) to suppress automatic vanity generation for entire content subtrees. Individual pages can also be excluded directly in Content Editor via the `jmix:permalinkExcluded` mixin.
+**Missing Permalink Audit** — Find all pages with no vanity URL, by language. Select and generate in one click. Useful when first enabling the module on an existing site.
 
-**Missing Permalink Audit**
-
-Find all pages on the site that have no vanity URL, broken down by language. Select the ones you want to fix and generate their vanities in a single click. Useful when first enabling the module on an existing site.
-
-**Force Regeneration**
-
-Scan the entire site and preview exactly which vanity URLs would change — stale (slug differs from title), manual (set by an editor), or missing — before writing anything. Each row shows the current URL and what it would become. Deselect rows you want to keep, confirm, and the module applies only the selected changes. Old vanities are always kept as redirects.
+**Force Regeneration** — Preview exactly which vanity URLs would change (stale, manual, or missing) before writing anything. Each row shows current URL and what it would become. Deselect rows to keep, confirm, done. Old vanities are always kept as redirects.
 
 ---
 
@@ -56,13 +50,9 @@ The following rules are new in 2.0.0. They fire automatically with no configurat
 - **Manual vanity detection** — when an editor writes a vanity URL directly in the SEO tab, the module marks it as manual and will not overwrite it in SMART mode.
 - **Vanity undelete** — if the module computes a URL that matches an existing deactivated vanity, it reactivates that node instead of creating a duplicate.
 
----
-
 ### Removed
 
 - **Spring framework dependency** — the service is now a pure OSGi Declarative Services component. The `META-INF/spring/` wiring present in 1.0.x has been removed. Third-party bundles that imported the Spring bean must rebind to the OSGi service.
-
----
 
 ### Testing
 
@@ -75,3 +65,42 @@ The following rules are new in 2.0.0. They fire automatically with no configurat
 ### Fixed
 
 - Vanity URL generation is now skipped for file nodes (`jnt:file` and subtypes). Previously the module attempted to generate vanities for binary content, which produced incorrect URLs.
+
+---
+
+## [1.0.3] — 2022-01-12
+
+### Fixed
+
+- Vanity generation is now skipped during JCR import operations to avoid conflicts with imported content.
+- Incorrect vanity URL for level-1 pages (pages directly under the site home) — path computation was off by one level.
+- Vanity URLs were incorrectly propagated to all languages on copy; generation now correctly targets the page's own languages only.
+- Unregistered namespace prefix error when processing nodes in certain workspaces.
+- `jnt:content` removed from the bypass type list ([#1](https://github.com/Jahia/permalink-generator/issues/1)) — content nodes now correctly receive vanity URLs.
+
+---
+
+## [1.0.2] — 2021-06-09
+
+### Fixed
+
+- Stability fixes in the service layer to prevent errors on certain site configurations.
+
+---
+
+## [1.0.1] — 2021-05-27
+
+### Fixed
+
+- Drools rule renamed to avoid conflicts with rules defined by other modules.
+
+---
+
+## [1.0.0] — 2021-04-23
+
+### Added
+
+- Initial release.
+- Automatic vanity URL generation from `jcr:title` via a Drools rule. Fires on every title change, excluding import operations.
+- SEO-friendly slug computed with the [Slugify](https://github.com/slugify/slugify) library (lowercase, accents stripped, spaces to hyphens).
+- Generation is skipped when the module is not enabled on the site.
