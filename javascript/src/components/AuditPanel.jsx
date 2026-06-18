@@ -24,6 +24,7 @@ function LegendItem({ cls, label }) {
 }
 
 export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths, actionUrl, i18n }) {
+    const [showLegend, setShowLegend] = useState(false);
     const [scanPath, setScanPath] = useState(sitePath);
     const [scanning, setScanning] = useState(false);
     const [scanStatus, setScanStatus] = useState({ msg: '', color: '#666' });
@@ -273,14 +274,24 @@ export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths
 
     return (
         <div className="pl-audit">
-            <h3>{i18n.auditTitle}</h3>
+            <h3 style={{ display: 'flex', alignItems: 'center' }}>
+                {i18n.auditTitle}
+                <button
+                    className="pl-help-btn"
+                    aria-expanded={showLegend}
+                    aria-label="Aide sur le code couleur"
+                    onClick={() => setShowLegend(v => !v)}
+                >?</button>
+            </h3>
             <p className="text-muted">{i18n.auditDesc}</p>
 
-            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', margin: '8px 0 16px', fontSize: 12 }}>
-                <LegendItem cls="pl-pill-miss" label={i18n.pillMissing} />
-                <LegendItem cls="pl-pill-sel"  label={i18n.pillSelected} />
-                <LegendItem cls="pl-pill-has"  label={i18n.pillExisting} />
-                <LegendItem cls="pl-pill-gen"  label={i18n.pillGenerated} />
+            <div className={'pl-legend-wrap' + (showLegend ? ' open' : '')}>
+                <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', padding: '0 0 16px', fontSize: 12 }}>
+                    <LegendItem cls="pl-pill-miss" label={i18n.pillMissing} />
+                    <LegendItem cls="pl-pill-sel"  label={i18n.pillSelected} />
+                    <LegendItem cls="pl-pill-has"  label={i18n.pillExisting} />
+                    <LegendItem cls="pl-pill-gen"  label={i18n.pillGenerated} />
+                </div>
             </div>
 
             <div className="control-group">

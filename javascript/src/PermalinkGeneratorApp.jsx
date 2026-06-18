@@ -43,6 +43,25 @@ const CUSTOM_CSS = `
 .pl-audit-table tr.pl-row-ignored td { opacity: 0.45; pointer-events: none; }
 .pl-regen { margin-top: 32px; border-top: 2px solid #e0e0e0; padding-top: 24px; max-width: 960px; }
 .pl-regen h3 { margin-top: 0; font-size: 18px; color: #555; }
+.pl-help-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 18px; height: 18px; border-radius: 50%;
+    border: 1px solid #aaa; background: transparent;
+    color: #666; font-size: 11px; font-weight: bold;
+    cursor: pointer; margin-left: 8px; vertical-align: middle; line-height: 1;
+    transition: background 150ms ease-out, color 150ms ease-out, border-color 150ms ease-out;
+}
+.pl-help-btn:hover, .pl-help-btn[aria-expanded="true"] {
+    background: #3c8cba; color: #fff; border-color: #3c8cba;
+}
+.pl-help-btn:focus-visible { outline: 2px solid #3c8cba; outline-offset: 2px; }
+.pl-legend-wrap {
+    display: grid; grid-template-rows: 0fr; opacity: 0;
+    transition: grid-template-rows 180ms ease-out, opacity 150ms ease-out;
+}
+.pl-legend-wrap > * { min-height: 0; overflow: hidden; }
+.pl-legend-wrap.open { grid-template-rows: 1fr; opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .pl-legend-wrap { transition: none; } }
 `;
 
 export default function PermalinkGeneratorApp({ contextPath, sitePath, siteLangs, excludedPaths, currentMode, actionUrl, i18n }) {

@@ -62,6 +62,7 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
     const [hasMore, setHasMore] = useState(false);
     const [loadMoreStatus, setLoadMoreStatus] = useState('');
     const [showConfirm, setShowConfirm] = useState(false);
+    const [showLegend, setShowLegend] = useState(false);
     const [reportEntries, setReportEntries] = useState([]);
 
     const offsetRef = useRef(0);
@@ -362,16 +363,26 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
         <div className="pl-regen">
             <ConfirmModal show={showConfirm} i18n={i18n} onCancel={() => setShowConfirm(false)} onConfirm={doGenerate} />
 
-            <h3>{i18n.regenTitle}</h3>
+            <h3 style={{ display: 'flex', alignItems: 'center' }}>
+                {i18n.regenTitle}
+                <button
+                    className="pl-help-btn"
+                    aria-expanded={showLegend}
+                    aria-label="Aide sur le code couleur"
+                    onClick={() => setShowLegend(v => !v)}
+                >?</button>
+            </h3>
             <p className="text-muted">{i18n.regenDesc}</p>
 
-            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', margin: '8px 0 16px', fontSize: 12 }}>
-                <LegendItem cls="pl-pill-miss"   label={i18n.pillMissing} />
-                <LegendItem cls="pl-pill-stale"  label={i18n.pillStale} />
-                <LegendItem cls="pl-pill-manual" label={i18n.pillManual} />
-                <LegendItem cls="pl-pill-has"    label={i18n.pillHasForce} />
-                <LegendItem cls="pl-pill-sel"    label={i18n.pillSelForce} />
-                <LegendItem cls="pl-pill-gen"    label={i18n.pillGenerated} />
+            <div className={'pl-legend-wrap' + (showLegend ? ' open' : '')}>
+                <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', padding: '0 0 16px', fontSize: 12 }}>
+                    <LegendItem cls="pl-pill-miss"   label={i18n.pillMissing} />
+                    <LegendItem cls="pl-pill-stale"  label={i18n.pillStale} />
+                    <LegendItem cls="pl-pill-manual" label={i18n.pillManual} />
+                    <LegendItem cls="pl-pill-has"    label={i18n.pillHasForce} />
+                    <LegendItem cls="pl-pill-sel"    label={i18n.pillSelForce} />
+                    <LegendItem cls="pl-pill-gen"    label={i18n.pillGenerated} />
+                </div>
             </div>
 
             <div className="control-group">
