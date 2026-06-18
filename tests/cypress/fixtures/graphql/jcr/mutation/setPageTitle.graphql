@@ -1,0 +1,9 @@
+mutation setPageTitle($path: String!, $language: String!, $title: String!) {
+    jcr(workspace: EDIT) {
+        mutateNode(pathOrId: $path) {
+            mutateProperty(name: "jcr:title") {
+                setValue(value: $title, language: $language)
+            }
+        }
+    }
+}

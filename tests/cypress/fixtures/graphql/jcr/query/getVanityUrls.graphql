@@ -1,0 +1,12 @@
+query getVanityUrls($path: String!) {
+    jcr {
+        nodeByPath(path: $path) {
+            vanityUrls {
+                url
+                language
+                active
+                defaultMapping
+            }
+        }
+    }
+}

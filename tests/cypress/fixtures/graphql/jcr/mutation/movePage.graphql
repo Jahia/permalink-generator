@@ -1,0 +1,7 @@
+mutation movePage($pathOrId: String!, $destParentPathOrId: String!) {
+    jcr {
+        moveNode(pathOrId: $pathOrId, destParentPathOrId: $destParentPathOrId) {
+            uuid
+        }
+    }
+}

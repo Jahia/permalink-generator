@@ -1,0 +1,9 @@
+query GetStartedModulesVersion {
+    dashboard {
+        modules {
+            id
+            version
+            state
+        }
+    }
+}

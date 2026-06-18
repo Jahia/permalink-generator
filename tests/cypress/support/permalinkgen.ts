@@ -1,0 +1,127 @@
+import {createSite as jahiaCreateSite, deleteSite as jahiaDeleteSite, enableModule, addNode} from '@jahia/cypress'
+
+export const SITE_KEY = 'plgentest'
+export const SITE_KEY_AUDIT = 'plgenaudit'  // used for scenario 4 (pages created before module enabled)
+
+// Admin settings URL for a site
+export const adminUrl = (siteKey: string = SITE_KEY) =>
+    `/jahia/administration/${siteKey}/permalinkGeneratorSiteSettings`
+
+// Create the main test site with EN + FR, module enabled from the start
+export const createTestSite = () => {
+    jahiaCreateSite(SITE_KEY, {
+        templateSet: 'empty-templates',
+        serverName: 'localhost',
+        locale: 'en',
+        languages: 'en,fr'
+    })
+    enableModule('permalink-generator', SITE_KEY)
+}
+
+// Create the audit test site (module added AFTER pages exist)
+export const createAuditSite = () => {
+    jahiaCreateSite(SITE_KEY_AUDIT, {
+        templateSet: 'empty-templates',
+        serverName: 'localhost',
+        locale: 'en',
+        languages: 'en,fr'
+    })
+    // Do NOT enable permalink-generator yet — pages are created first in the test
+}
+
+export const deleteTestSite = () => { jahiaDeleteSite(SITE_KEY) }
+export const deleteAuditSite = () => { jahiaDeleteSite(SITE_KEY_AUDIT) }
+
+// Create a jnt:page with multilingual titles
+export const createPage = (parentPath: string, name: string, titleEn: string, titleFr: string) => {
+    addNode({
+        parentPathOrId: parentPath,
+        name,
+        primaryNodeType: 'jnt:page',
+        properties: [
+            {name: 'jcr:title', value: titleEn, language: 'en'},
+            {name: 'jcr:title', value: titleFr, language: 'fr'},
+            {name: 'j:templateName', value: 'empty'}
+        ],
+        children: [{name: 'pagecontent', primaryNodeType: 'jnt:contentList'}]
+    })
+}
+
+// Publish a node
+export const publishNode = (pathOrId: string, waitMs: number = 3000) => {
+    cy.apollo({
+        mutationFile: 'graphql/jcr/mutation/publishNode.graphql',
+        variables: {pathOrId, languages: ['en', 'fr'], publishSubNodes: true, includeSubTree: true}
+    })
+    cy.wait(waitMs)
+}
+
+// Set a page title in a specific language (for rename scenario)
+export const setPageTitle = (path: string, language: string, title: string) => {
+    cy.apollo({
+        mutationFile: 'graphql/jcr/mutation/setPageTitle.graphql',
+        variables: {path, language, title}
+    })
+}
+
+// Move a page to a new parent
+export const movePage = (pathOrId: string, destParentPathOrId: string) => {
+    cy.apollo({
+        mutationFile: 'graphql/jcr/mutation/movePage.graphql',
+        variables: {pathOrId, destParentPathOrId}
+    })
+}
+
+// Make an auto-generated vanity URL "manual" by removing jmix:permalinkGenerated mixin.
+// The module uses this mixin to identify auto-generated vanities; without it the URL is treated as manual.
+export const makeVanityManual = (contentPath: string, language: string) => {
+    cy.executeGroovy('groovy/permalinkgen/makeVanityManual.groovy', {
+        PATH: contentPath,
+        LANG: language
+    })
+}
+
+// Create a manual vanity URL (without jmix:permalinkGenerated) via Groovy
+export const createManualVanityUrl = (contentPath: string, language: string, url: string, siteKey: string) => {
+    cy.executeGroovy('groovy/permalinkgen/createManualVanityUrl.groovy', {
+        CONTENT_PATH: contentPath,
+        LANG: language,
+        VANITY_URL: url,
+        SITE_KEY: siteKey
+    })
+}
+
+// Query vanity URLs for a node
+export const getVanityUrls = (path: string): Cypress.Chainable<any> => {
+    return cy.apollo({
+        queryFile: 'graphql/jcr/query/getVanityUrls.graphql',
+        variables: {path}
+    })
+}
+
+// Poll until the node has an active default vanity URL for the given language.
+// Returns the URL string via the .then() chain.
+export const waitForVanityUrl = (path: string, language: string, timeoutMs: number = 15000) => {
+    const interval = 2000
+    const end = Date.now() + timeoutMs
+    const attempt = (): Cypress.Chainable<string | null> => {
+        return getVanityUrls(path).then((resp: any) => {
+            const vanities = resp?.data?.jcr?.nodeByPath?.vanityUrls ?? []
+            const match = vanities.find((v: any) => v.language === language && v.active && v.defaultMapping)
+            if (match) return match.url as string
+            if (Date.now() >= end) throw new Error(`waitForVanityUrl: no active default vanity for [${language}] on ${path} after ${timeoutMs}ms`)
+            return cy.wait(interval).then(() => attempt()) as any
+        })
+    }
+    return attempt()
+}
+
+// Assert NO active default vanity for a language (used for SMART mode checks)
+export const assertNoVanityUrlChange = (path: string, language: string, expectedUrl: string) => {
+    getVanityUrls(path).then((resp: any) => {
+        const vanities = resp?.data?.jcr?.nodeByPath?.vanityUrls ?? []
+        const match = vanities.find((v: any) => v.language === language && v.active && v.defaultMapping)
+        expect(match, `Expected a vanity URL for [${language}] on ${path}`).to.exist
+        expect(match.url, `Vanity URL should still be ${expectedUrl} (SMART mode should not overwrite manual)`).to.equal(expectedUrl)
+    })
+}
