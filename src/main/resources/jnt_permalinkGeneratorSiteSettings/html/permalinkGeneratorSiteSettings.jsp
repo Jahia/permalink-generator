@@ -1,21 +1,9 @@
 <%@ page language="java" contentType="text/html;charset=UTF-8" %>
-<%@ page import="org.owasp.csrfguard.CsrfGuard" %>
 <%@ taglib prefix="template" uri="http://www.jahia.org/tags/templateLib" %>
 <%@ taglib prefix="c" uri="http://java.sun.com/jsp/jstl/core" %>
 <%@ taglib prefix="fn" uri="http://java.sun.com/jsp/jstl/functions" %>
 <%@ taglib prefix="fmt" uri="http://java.sun.com/jsp/jstl/fmt" %>
 <%--@elvariable id="renderContext" type="org.jahia.services.render.RenderContext"--%>
-<%
-    String _plCsrf = "";
-    try {
-        javax.servlet.http.HttpSession _s = request.getSession(false);
-        if (_s != null) {
-            Object _t = _s.getAttribute(CsrfGuard.getInstance().getTokenName());
-            if (_t instanceof String) _plCsrf = (String) _t;
-        }
-    } catch (Exception _ignored) {}
-    pageContext.setAttribute("plCsrfToken", _plCsrf);
-%>
 <fmt:setBundle basename="resources.permalink-generator"/>
 
 <template:addResources type="css" resources="admin-bootstrap.css"/>
@@ -85,7 +73,6 @@
 <script>
 window.__PL_CONFIG__ = {
     contextPath: '${pageContext.request.contextPath}',
-    csrfToken: '${fn:escapeXml(plCsrfToken)}',
     sitePath: '${fn:escapeXml(renderContext.site.path)}',
     currentMode: '${fn:escapeXml(currentMode)}',
     siteLangs: [<c:forEach items="${renderContext.site.languages}" var="_l" varStatus="_ls"><c:if test="${!_ls.first}">,</c:if>'${fn:escapeXml(_l)}'</c:forEach>],
