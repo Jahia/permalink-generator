@@ -17,7 +17,7 @@ function isExcludedBySettings(nodePath, excludedPaths) {
 function LegendItem({ cls, label }) {
     return (
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-            <span className={'pl-pill ' + cls} style={{ cursor: 'default', pointerEvents: 'none' }}>XX</span>
+            <span className={'pl-pill ' + cls} style={{ cursor: 'default', pointerEvents: 'none' }} aria-hidden="true">XX</span>
             <span style={{ color: '#555' }}>{label}</span>
         </span>
     );
@@ -279,13 +279,14 @@ export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths
                 <button
                     className="pl-help-btn"
                     aria-expanded={showLegend}
-                    aria-label="Aide sur le code couleur"
+                    aria-controls="plAuditLegend"
+                    aria-label={i18n.legendHelp}
                     onClick={() => setShowLegend(v => !v)}
                 >?</button>
             </h3>
             <p className="text-muted">{i18n.auditDesc}</p>
 
-            <div className={'pl-legend-wrap' + (showLegend ? ' open' : '')}>
+            <div id="plAuditLegend" className={'pl-legend-wrap' + (showLegend ? ' open' : '')}>
                 <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', padding: '0 0 16px', fontSize: 12 }}>
                     <LegendItem cls="pl-pill-miss" label={i18n.pillMissing} />
                     <LegendItem cls="pl-pill-sel"  label={i18n.pillSelected} />
@@ -307,30 +308,47 @@ export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths
                         onChange={e => setScanPath(e.target.value)}
                         style={{ fontFamily: 'monospace', fontSize: 12 }}
                     />
-                    <button className="btn" onClick={() => doScan(true)} disabled={scanning}>
-                        <i className="icon-search"></i> {i18n.auditScan}
+                    <button
+                        className="btn"
+                        onClick={() => doScan(true)}
+                        disabled={scanning}
+                        aria-busy={scanning}
+                    >
+                        <i className="icon-search" aria-hidden="true"></i> {i18n.auditScan}
                     </button>
-                    <span style={{ fontSize: 12, color: scanStatus.color }}>{scanStatus.msg}</span>
+                    <span role="status" aria-live="polite" style={{ fontSize: 12, color: scanStatus.color }}>{scanStatus.msg}</span>
                 </div>
             </div>
 
             {showResults && (
                 <div style={{ marginTop: 16 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
-                        <span style={{ fontSize: 13, fontWeight: 'bold' }}>
+                        <span aria-live="polite" style={{ fontSize: 13, fontWeight: 'bold' }}>
                             {i18n.summary.replace('{0}', rows.length)}
                         </span>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                            <button className="btn btn-success" onClick={doGenerate} disabled={selCount === 0 || generating}>
-                                <i className="icon-cog icon-white"></i> {i18n.auditGenerate} ({selCount})
+                            <button
+                                className="btn btn-success"
+                                onClick={doGenerate}
+                                disabled={selCount === 0 || generating}
+                                aria-busy={generating}
+                            >
+                                <i className="icon-cog icon-white" aria-hidden="true"></i> {i18n.auditGenerate} ({selCount})
                             </button>
-                            <span style={{ fontSize: 12, color: genStatus.color }}>{genStatus.msg}</span>
+                            <span role="status" aria-live="polite" style={{ fontSize: 12, color: genStatus.color }}>{genStatus.msg}</span>
                         </div>
                     </div>
 
                     {showProgress && (
-                        <div className="pl-progress-wrap">
-                            <div className="pl-progress-bar" style={{ transform: `scaleX(${progress})` }}></div>
+                        <div
+                            className="pl-progress-wrap"
+                            role="progressbar"
+                            aria-valuenow={Math.round(progress * 100)}
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-label={i18n.scanRunning}
+                        >
+                            <div className="pl-progress-bar" style={{ transform: `scaleX(${progress})` }} aria-hidden="true"></div>
                         </div>
                     )}
 
@@ -341,18 +359,19 @@ export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths
                                     <th style={{ width: 28 }}>
                                         <input
                                             type="checkbox"
-                                            title={i18n.auditSelectAll}
+                                            aria-label={i18n.auditSelectAll}
                                             checked={allSelected}
                                             onChange={e => toggleSelectAll(e.target.checked)}
                                         />
                                     </th>
                                     <th>{i18n.auditColPath}</th>
                                     {langs.map(lang => (
-                                        <th key={lang} className="pl-lang-th" title={i18n.colLangTitle.replace('{0}', lang.toUpperCase())} data-lang={lang}>
+                                        <th key={lang} className="pl-lang-th" data-lang={lang}>
                                             {lang.toUpperCase()}<br/>
                                             <input
                                                 type="checkbox"
                                                 style={{ margin: '2px 0 0 0' }}
+                                                aria-label={i18n.colLangTitle.replace('{0}', lang.toUpperCase())}
                                                 checked={(() => {
                                                     const colMissing = rows.filter(r => r.missing.has(lang) && !r.generated.has(lang));
                                                     return colMissing.length > 0 && colMissing.every(r => selections[r.uuid] && selections[r.uuid].has(lang));
@@ -378,7 +397,7 @@ export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths
                                                     type="checkbox"
                                                     checked={rowChecked}
                                                     disabled={row.isHomePage}
-                                                    title={row.isHomePage ? 'Homepage — skipped' : undefined}
+                                                    aria-label={row.isHomePage ? 'Homepage — skipped' : row.path}
                                                     onChange={e => toggleRow(row.uuid, e.target.checked)}
                                                 />
                                             </td>
@@ -390,25 +409,31 @@ export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths
                                             </td>
                                             {langs.map(lang => {
                                                 let cls = 'pl-pill';
-                                                let title = '';
+                                                let pillLabel = '';
                                                 let clickable = false;
                                                 if (row.generated.has(lang)) {
-                                                    cls += ' pl-pill-gen'; title = i18n.pillGenerated;
+                                                    cls += ' pl-pill-gen'; pillLabel = i18n.pillGenerated;
                                                 } else if (!row.missing.has(lang)) {
-                                                    cls += ' pl-pill-has'; title = i18n.pillExisting;
+                                                    cls += ' pl-pill-has'; pillLabel = i18n.pillExisting;
                                                 } else {
                                                     const isSel = !!(selections[row.uuid] && selections[row.uuid].has(lang));
                                                     cls += isSel ? ' pl-pill-sel' : ' pl-pill-miss';
-                                                    title = isSel ? i18n.pillSelected : i18n.pillMissing;
+                                                    pillLabel = isSel ? i18n.pillSelected : i18n.pillMissing;
                                                     clickable = !row.isHomePage;
                                                 }
-                                                if (row.hasNoTitle) { cls += ' pl-notitle'; title += ' — ' + i18n.pillNoTitle; }
+                                                if (row.hasNoTitle) { cls += ' pl-notitle'; pillLabel += ' — ' + i18n.pillNoTitle; }
+                                                const isPressed = !!(selections[row.uuid] && selections[row.uuid].has(lang));
                                                 return (
                                                     <td key={lang} style={{ textAlign: 'center' }}>
                                                         <span
                                                             className={cls}
-                                                            title={title}
+                                                            title={pillLabel}
+                                                            role={clickable ? 'button' : undefined}
+                                                            tabIndex={clickable ? 0 : undefined}
+                                                            aria-pressed={clickable ? isPressed : undefined}
+                                                            aria-label={clickable ? `${lang.toUpperCase()} — ${pillLabel}` : undefined}
                                                             onClick={clickable ? () => toggleCell(row.uuid, lang) : undefined}
+                                                            onKeyDown={clickable ? e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleCell(row.uuid, lang); } } : undefined}
                                                         >
                                                             {lang}
                                                         </span>
@@ -424,10 +449,14 @@ export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths
 
                     {hasMore && (
                         <div style={{ textAlign: 'center', marginTop: 12 }}>
-                            <button className="btn" onClick={() => doScan(false)} disabled={scanning}>
+                            <button className="btn" onClick={() => doScan(false)} disabled={scanning} aria-busy={scanning}>
                                 {i18n.auditLoadMore}
                             </button>
-                            {loadMoreStatus && <span style={{ fontSize: 12, color: '#777', marginLeft: 8 }}>{loadMoreStatus}</span>}
+                            {loadMoreStatus && (
+                                <span role="status" aria-live="polite" style={{ fontSize: 12, color: '#777', marginLeft: 8 }}>
+                                    {loadMoreStatus}
+                                </span>
+                            )}
                         </div>
                     )}
                 </div>

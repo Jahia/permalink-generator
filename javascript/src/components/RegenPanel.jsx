@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { gql, postAction } from '../utils/api';
 
 const BATCH = 100;
@@ -17,21 +17,48 @@ function isExcludedBySettings(nodePath, excludedPaths) {
 function LegendItem({ cls, label }) {
     return (
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-            <span className={'pl-pill ' + cls} style={{ cursor: 'default', pointerEvents: 'none' }}>XX</span>
+            <span className={'pl-pill ' + cls} style={{ cursor: 'default', pointerEvents: 'none' }} aria-hidden="true">XX</span>
             <span style={{ color: '#555' }}>{label}</span>
         </span>
     );
 }
 
 function ConfirmModal({ show, i18n, onCancel, onConfirm }) {
+    const modalRef = useRef(null);
+
+    useEffect(() => {
+        if (show && modalRef.current) modalRef.current.focus();
+    }, [show]);
+
+    useEffect(() => {
+        if (!show) return;
+        const onKey = e => { if (e.key === 'Escape') onCancel(); };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, [show, onCancel]);
+
     if (!show) return null;
     return (
         <>
-            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1040 }} onClick={onCancel} />
-            <div className="modal" style={{ display: 'block', position: 'fixed', top: '20%', left: '50%', transform: 'translateX(-50%)', zIndex: 1050, width: 500, background: '#fff', borderRadius: 4, boxShadow: '0 3px 9px rgba(0,0,0,0.5)' }} tabIndex={-1} role="dialog">
+            <div
+                style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1040 }}
+                onClick={onCancel}
+                aria-hidden="true"
+            />
+            <div
+                ref={modalRef}
+                className="modal"
+                style={{ display: 'block', position: 'fixed', top: '20%', left: '50%', transform: 'translateX(-50%)', zIndex: 1050, width: 500, background: '#fff', borderRadius: 4, boxShadow: '0 3px 9px rgba(0,0,0,0.5)' }}
+                tabIndex={-1}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="plConfirmTitle"
+            >
                 <div className="modal-header">
-                    <button type="button" className="close" onClick={onCancel}>&times;</button>
-                    <h3>{i18n.confirmTitle}</h3>
+                    <button type="button" className="close" aria-label={i18n.cancel} onClick={onCancel}>
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                    <h3 id="plConfirmTitle">{i18n.confirmTitle}</h3>
                 </div>
                 <div className="modal-body">
                     <p>{i18n.confirmBody}</p>
@@ -40,7 +67,7 @@ function ConfirmModal({ show, i18n, onCancel, onConfirm }) {
                     <button className="btn" onClick={onCancel}>{i18n.cancel}</button>
                     {' '}
                     <button className="btn btn-warning" onClick={onConfirm}>
-                        <i className="icon-cog icon-white"></i> {i18n.confirmProceed}
+                        <i className="icon-cog icon-white" aria-hidden="true"></i> {i18n.confirmProceed}
                     </button>
                 </div>
             </div>
@@ -368,13 +395,14 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
                 <button
                     className="pl-help-btn"
                     aria-expanded={showLegend}
-                    aria-label="Aide sur le code couleur"
+                    aria-controls="plRegenLegend"
+                    aria-label={i18n.legendHelp}
                     onClick={() => setShowLegend(v => !v)}
                 >?</button>
             </h3>
             <p className="text-muted">{i18n.regenDesc}</p>
 
-            <div className={'pl-legend-wrap' + (showLegend ? ' open' : '')}>
+            <div id="plRegenLegend" className={'pl-legend-wrap' + (showLegend ? ' open' : '')}>
                 <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', padding: '0 0 16px', fontSize: 12 }}>
                     <LegendItem cls="pl-pill-miss"   label={i18n.pillMissing} />
                     <LegendItem cls="pl-pill-stale"  label={i18n.pillStale} />
@@ -387,8 +415,13 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
 
             <div className="control-group">
                 <div className="controls" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <button className="btn" onClick={() => doScan(true)} disabled={scanning}>
-                        <i className="icon-search"></i> {i18n.regenScan}
+                    <button
+                        className="btn"
+                        onClick={() => doScan(true)}
+                        disabled={scanning}
+                        aria-busy={scanning}
+                    >
+                        <i className="icon-search" aria-hidden="true"></i> {i18n.regenScan}
                     </button>
                     <label style={{ margin: 0, fontWeight: 'normal', fontSize: 13 }}>
                         <input
@@ -399,27 +432,39 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
                         />
                         {i18n.regenBypass}
                     </label>
-                    <span style={{ fontSize: 12, color: scanStatus.color }}>{scanStatus.msg}</span>
+                    <span role="status" aria-live="polite" style={{ fontSize: 12, color: scanStatus.color }}>{scanStatus.msg}</span>
                 </div>
             </div>
 
             {showResults && (
                 <div style={{ marginTop: 16 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
-                        <span style={{ fontSize: 13, fontWeight: 'bold' }}>
+                        <span aria-live="polite" style={{ fontSize: 13, fontWeight: 'bold' }}>
                             {i18n.regenSummary.replace('{0}', rows.length)}
                         </span>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                            <button className="btn btn-warning" onClick={() => setShowConfirm(true)} disabled={selCount === 0 || generating}>
-                                <i className="icon-cog icon-white"></i> {i18n.regenGenerate} ({selCount})
+                            <button
+                                className="btn btn-warning"
+                                onClick={() => setShowConfirm(true)}
+                                disabled={selCount === 0 || generating}
+                                aria-busy={generating}
+                            >
+                                <i className="icon-cog icon-white" aria-hidden="true"></i> {i18n.regenGenerate} ({selCount})
                             </button>
-                            <span style={{ fontSize: 12, color: genStatus.color }}>{genStatus.msg}</span>
+                            <span role="status" aria-live="polite" style={{ fontSize: 12, color: genStatus.color }}>{genStatus.msg}</span>
                         </div>
                     </div>
 
                     {showProgress && (
-                        <div className="pl-progress-wrap">
-                            <div className="pl-progress-bar" style={{ transform: `scaleX(${progress})` }}></div>
+                        <div
+                            className="pl-progress-wrap"
+                            role="progressbar"
+                            aria-valuenow={Math.round(progress * 100)}
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-label={i18n.scanRunning}
+                        >
+                            <div className="pl-progress-bar" style={{ transform: `scaleX(${progress})` }} aria-hidden="true"></div>
                         </div>
                     )}
 
@@ -430,18 +475,19 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
                                     <th style={{ width: 28 }}>
                                         <input
                                             type="checkbox"
-                                            title={i18n.auditSelectAll}
+                                            aria-label={i18n.auditSelectAll}
                                             checked={allSelected}
                                             onChange={e => toggleSelectAll(e.target.checked)}
                                         />
                                     </th>
                                     <th>{i18n.auditColPath}</th>
                                     {langs.map(lang => (
-                                        <th key={lang} className="pl-lang-th" title={i18n.colLangTitle.replace('{0}', lang.toUpperCase())} data-lang={lang}>
+                                        <th key={lang} className="pl-lang-th" data-lang={lang}>
                                             {lang.toUpperCase()}<br/>
                                             <input
                                                 type="checkbox"
                                                 style={{ margin: '2px 0 0 0' }}
+                                                aria-label={i18n.colLangTitle.replace('{0}', lang.toUpperCase())}
                                                 checked={(() => {
                                                     const colActive = rows.filter(r => !r.generated.has(lang) && !r.isHomePage);
                                                     return colActive.length > 0 && colActive.every(r => selections[r.uuid] && selections[r.uuid].has(lang));
@@ -467,7 +513,7 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
                                                     type="checkbox"
                                                     checked={rowChecked}
                                                     disabled={row.isHomePage}
-                                                    title={row.isHomePage ? 'Homepage — skipped' : undefined}
+                                                    aria-label={row.isHomePage ? 'Homepage — skipped' : row.path}
                                                     onChange={e => toggleRow(row.uuid, e.target.checked)}
                                                 />
                                             </td>
@@ -479,31 +525,37 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
                                             </td>
                                             {langs.map(lang => {
                                                 let cls = 'pl-pill';
-                                                let title = '';
+                                                let pillLabel = '';
+                                                const clickable = !row.isHomePage && !row.generated.has(lang);
                                                 if (row.generated.has(lang)) {
-                                                    cls += ' pl-pill-gen'; title = i18n.pillGenerated;
+                                                    cls += ' pl-pill-gen'; pillLabel = i18n.pillGenerated;
                                                 } else {
                                                     const isSel = !!(selections[row.uuid] && selections[row.uuid].has(lang));
                                                     if (isSel) {
-                                                        cls += ' pl-pill-sel'; title = i18n.pillSelForce;
+                                                        cls += ' pl-pill-sel'; pillLabel = i18n.pillSelForce;
                                                     } else if (row.missingLangs.has(lang)) {
-                                                        cls += ' pl-pill-miss'; title = i18n.pillMissing;
+                                                        cls += ' pl-pill-miss'; pillLabel = i18n.pillMissing;
                                                     } else if (row.staleLangs && row.staleLangs.has(lang)) {
-                                                        cls += ' pl-pill-stale'; title = i18n.pillStale;
+                                                        cls += ' pl-pill-stale'; pillLabel = i18n.pillStale;
                                                     } else if (row.manualLangs && row.manualLangs.has(lang)) {
-                                                        cls += ' pl-pill-manual'; title = i18n.pillManual;
+                                                        cls += ' pl-pill-manual'; pillLabel = i18n.pillManual;
                                                     } else {
-                                                        cls += ' pl-pill-has'; title = i18n.pillHasForce;
+                                                        cls += ' pl-pill-has'; pillLabel = i18n.pillHasForce;
                                                     }
                                                 }
-                                                if (row.hasNoTitle) { cls += ' pl-notitle'; title += ' — ' + i18n.pillNoTitle; }
+                                                if (row.hasNoTitle) { cls += ' pl-notitle'; pillLabel += ' — ' + i18n.pillNoTitle; }
+                                                const isPressed = !!(selections[row.uuid] && selections[row.uuid].has(lang));
                                                 return (
                                                     <td key={lang} style={{ textAlign: 'center' }}>
                                                         <span
                                                             className={cls}
-                                                            title={title}
-                                                            style={!row.isHomePage && !row.generated.has(lang) ? { cursor: 'pointer' } : undefined}
-                                                            onClick={!row.isHomePage && !row.generated.has(lang) ? () => toggleCell(row.uuid, lang) : undefined}
+                                                            title={pillLabel}
+                                                            role={clickable ? 'button' : undefined}
+                                                            tabIndex={clickable ? 0 : undefined}
+                                                            aria-pressed={clickable ? isPressed : undefined}
+                                                            aria-label={clickable ? `${lang.toUpperCase()} — ${pillLabel}` : undefined}
+                                                            onClick={clickable ? () => toggleCell(row.uuid, lang) : undefined}
+                                                            onKeyDown={clickable ? e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleCell(row.uuid, lang); } } : undefined}
                                                         >
                                                             {lang}
                                                         </span>
@@ -519,10 +571,14 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
 
                     {hasMore && (
                         <div style={{ textAlign: 'center', marginTop: 12 }}>
-                            <button className="btn" onClick={() => doScan(false)} disabled={scanning}>
+                            <button className="btn" onClick={() => doScan(false)} disabled={scanning} aria-busy={scanning}>
                                 {i18n.auditLoadMore}
                             </button>
-                            {loadMoreStatus && <span style={{ fontSize: 12, color: '#777', marginLeft: 8 }}>{loadMoreStatus}</span>}
+                            {loadMoreStatus && (
+                                <span role="status" aria-live="polite" style={{ fontSize: 12, color: '#777', marginLeft: 8 }}>
+                                    {loadMoreStatus}
+                                </span>
+                            )}
                         </div>
                     )}
 

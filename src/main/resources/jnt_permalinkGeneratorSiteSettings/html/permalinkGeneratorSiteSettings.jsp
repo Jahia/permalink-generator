@@ -65,6 +65,7 @@
 <fmt:message key="permalinkgenerator.regen.report.created"     var="i18n_reportCreated"/>
 <fmt:message key="permalinkgenerator.regen.report.promoted"    var="i18n_reportPromoted"/>
 <fmt:message key="permalinkgenerator.regen.report.already_correct" var="i18n_reportCorrect"/>
+<fmt:message key="permalinkgenerator.legend.help"              var="i18n_legendHelp"/>
 
 <c:set var="currentMode" value="${renderContext.site.hasProperty('j:permalinkGeneratorMode') ? renderContext.site.getProperty('j:permalinkGeneratorMode').string : 'SMART'}"/>
 
@@ -134,7 +135,8 @@ window.__PL_CONFIG__ = {
         reportTitle:    '${fn:escapeXml(i18n_reportTitle)}',
         reportCreated:  '${fn:escapeXml(i18n_reportCreated)}',
         reportPromoted: '${fn:escapeXml(i18n_reportPromoted)}',
-        reportCorrect:  '${fn:escapeXml(i18n_reportCorrect)}'
+        reportCorrect:  '${fn:escapeXml(i18n_reportCorrect)}',
+        legendHelp:     '${fn:escapeXml(i18n_legendHelp)}'
     }
 };
 window.__PL_CONFIG__.actionUrl = window.location.pathname.replace(/\.[^/]+\.html$/, '') + '.generatePermalinks.do';

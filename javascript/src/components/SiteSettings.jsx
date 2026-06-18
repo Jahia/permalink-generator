@@ -80,18 +80,26 @@ export default function SiteSettings({ contextPath, sitePath, currentMode, exclu
                 </div>
 
                 <div style={{ marginTop: 20 }}>
-                    <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+                    <button
+                        className="btn btn-primary"
+                        onClick={handleSave}
+                        disabled={saving}
+                        aria-busy={saving}
+                    >
                         {i18n.save}
                     </button>
                     {' '}
                     <button className="btn" onClick={handleCancel}>
                         {i18n.cancel}
                     </button>
-                    {status && (
-                        <span style={{ marginLeft: 12, fontSize: 13, color: status.ok ? '#27ae60' : '#c0392b' }}>
-                            {status.msg}
-                        </span>
-                    )}
+                    {/* aria-live so screen readers announce save result */}
+                    <span
+                        role="status"
+                        aria-live="polite"
+                        style={{ marginLeft: 12, fontSize: 13, color: status ? (status.ok ? '#27ae60' : '#c0392b') : undefined }}
+                    >
+                        {status ? status.msg : ''}
+                    </span>
                 </div>
             </div>
         </div>
