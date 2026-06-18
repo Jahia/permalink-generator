@@ -13,5 +13,8 @@
     "cypress-terminal-report": "^5.3.7",
     "typescript": "^4.4.4"
   },
-  "packageManager": "yarn@1.22.22"
+  "packageManager": "yarn@1.22.22",
+  "dependencies": {
+    "cross-fetch": "^4.1.0"
+  }
 }
