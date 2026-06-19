@@ -1,0 +1,8 @@
+- karafCommand: "log:log 'START - permalink-generator provisioning'"
+
+- installBundle:
+    - 'file:///home/jahians/assets/empty-templates-1.0.0.jar'
+  autoStart: true
+  uninstallPreviousVersion: true
+
+- karafCommand: "log:log 'END - permalink-generator provisioning'"
