@@ -4,9 +4,8 @@ End-to-end integration tests using [@jahia/cypress](https://github.com/Jahia/jah
 
 ## Prerequisites
 
-- Jahia 8.x running at `http://localhost:8080` (default)
-- `permalink-generator` module deployed (OSGi bundle installed)
 - Node.js ≥ 18, yarn
+- For local dev: Jahia 8.x running at `http://localhost:8080` with `permalink-generator` deployed
 
 ## Install
 
@@ -15,29 +14,66 @@ cd tests
 yarn install
 ```
 
-## Run
+## Run against a local Jahia instance
+
+1. Start Jahia 8.x (tested against **8.2.3**).
+2. Deploy `permalink-generator` — install the OSGi bundle from `../target/` via the Jahia modules UI or karaf.
+3. Run the tests:
 
 ```bash
-# Headless (CI)
-yarn cypress:run
+# Headless
+yarn e2e:ci
 
-# Interactive
-yarn cypress:open
+# Interactive (opens Cypress UI)
+yarn e2e:debug
 ```
 
-Environment variables (override defaults):
+By default Cypress targets `http://localhost:8080` with credentials `root / root1234`. Override:
 
-| Variable | Default | Purpose |
+| Env variable | Default | Purpose |
 |---|---|---|
 | `CYPRESS_BASE_URL` | `http://localhost:8080` | Jahia base URL |
-| `CYPRESS_JAHIA_USERNAME` | `root` | Jahia admin user |
-| `CYPRESS_JAHIA_PASSWORD` | `root1234` | Jahia admin password |
+| `CYPRESS_SUPER_USER_PASSWORD` | `root1234` | Jahia admin password |
 
 Run a single spec:
 
 ```bash
-yarn cypress:run --spec "cypress/e2e/04-audit-panel.cy.ts"
+yarn e2e:ci --spec "cypress/e2e/04-audit-panel.cy.ts"
 ```
+
+## Run with Docker (Jahia community CI standard)
+
+Copy `.env.example` to `.env` and set:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `JAHIA_IMAGE` | `ghcr.io/jahia/jahia-ee-dev:8.2.3.0` | Jahia Docker image |
+| `TESTS_IMAGE` | `jahia/permalink-generator:latest` | Cypress test image |
+| `MODULE_ID` | `permalink-generator` | Module being tested |
+| `MANIFEST` | `provisioning-manifest-snapshot.yml` | Provisioning manifest |
+| `SUPER_USER_PASSWORD` | `root1234` | Jahia admin password |
+| `JAHIA_LICENSE` | _(empty)_ | Base64-encoded EE license (required for EE images) |
+
+```bash
+# 1. Build Docker image (copies SNAPSHOT jar from ../target/)
+./ci.build.sh
+
+# 2. Start Jahia + Cypress containers
+./ci.startup.sh
+
+# 3. Run tests interactively
+./env.debug.sh
+
+# 4. Post-run cleanup
+./ci.postrun.sh
+```
+
+### Provisioning manifests
+
+| Manifest | Use |
+|---|---|
+| `provisioning-manifest-snapshot.yml` | CI — installs the SNAPSHOT jar from `artifacts/` |
+| `provisioning-manifest-build.yml` | Stable build — installs from Maven repository only |
 
 ## Test Scenarios
 
