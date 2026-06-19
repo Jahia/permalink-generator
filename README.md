@@ -1,8 +1,8 @@
 # Permalink Generator
 
-[![Jahia 8.x](https://img.shields.io/badge/Jahia-8.x-blue)](https://www.jahia.com)
+[![Jahia 8.2.3+](https://img.shields.io/badge/Jahia-8.2.3%2B-blue)](https://www.jahia.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Jahia Store](https://img.shields.io/badge/Jahia%20Store-permalink--generator-brightgreen)](https://store.jahia.com/contents/modules-repository/org/jahia/community/permalink-generator.html)
+[![Jahia Store](https://img.shields.io/badge/Jahia%20Store-permalink--generator-brightgreen)](https://store.jahia.com/contents/modules-repository/org/jahiacommunity/modules/permalink-generator.html)
 
 Automatically generates and maintains permanent vanity URLs for Jahia pages and displayable content. Module-generated vanities are tagged with `jmix:permalinkGenerated` to distinguish them from manually-set ones, enabling coexistence of automatic and editorial URL strategies.
 
@@ -104,7 +104,7 @@ Old vanities are always kept as redirects — no existing links 404.
 
 ### Requirements
 
-- Jahia 8.x
+- Jahia 8.2.3+
 - `seo` module (Jahia built-in)
 
 ### Installation
