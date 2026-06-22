@@ -25,3 +25,9 @@ javascript/.yarnrc.yml
 javascript/yarn.lock
 javascript/.pnp.*
 *.js.map
+/META-INF/
+/name/
+/hibernate.properties
+/jahiaSizeOfEngine.filter
+/jahiahtmlheader.xsl
+/jahiapublickeystore
