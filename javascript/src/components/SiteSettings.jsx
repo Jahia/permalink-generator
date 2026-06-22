@@ -96,7 +96,7 @@ export default function SiteSettings({ contextPath, sitePath, currentMode, exclu
                     <span
                         role="status"
                         aria-live="polite"
-                        style={{ marginLeft: 12, fontSize: '0.8125rem', color: status ? (status.ok ? '#0d6636' : '#922b21') : undefined }}
+                        style={{ marginLeft: 12, fontSize: '0.8125rem', color: status ? (status.ok ? '#0a4d25' : '#922b21') : undefined }}
                     >
                         {status ? status.msg : ''}
                     </span>

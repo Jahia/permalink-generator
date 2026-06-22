@@ -1,6 +1,7 @@
 const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
-const base = require('./webpack.config');
+// webpack.config.js exports a function (env, argv); call it to get the config object.
+const base = require('./webpack.config')({}, { mode: 'development' });
 
 module.exports = {
     ...base,

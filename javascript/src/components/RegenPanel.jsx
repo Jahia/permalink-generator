@@ -38,7 +38,7 @@ function ConfirmModal({ show, i18n, onCancel, onConfirm }) {
             const active = document.activeElement;
             if (e.shiftKey) {
                 if (active === first || active === modalRef.current) { e.preventDefault(); last.focus(); }
-            } else if (active === last) {
+            } else if (active === last || active === modalRef.current) {
                 e.preventDefault();
                 first.focus();
             }
@@ -152,7 +152,7 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
             const nodes = [];
             const errors = [];
             const nodesOf = data => {
-                try { return data.data.jcr.nodesByQuery.nodes || []; } catch (e) { return []; }
+                try { return data.data.jcr.nodesByQuery.nodes || []; } catch (e) { console.warn(e); return []; }
             };
             for (const data of [r1, r2]) {
                 if (data.errors) { errors.push(...data.errors.map(e => e.message)); continue; }
@@ -381,7 +381,7 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
             } else if (errorCount > 0) {
                 setGenStatus({ msg: i18n.regenError.replace('{0}', '?').replace('{1}', '—'), color: '#922b21' });
             } else if (done > 0) {
-                setGenStatus({ msg: i18n.regenSuccess.replace('{0}', done), color: '#0d6636' });
+                setGenStatus({ msg: i18n.regenSuccess.replace('{0}', done), color: '#0a4d25' });
             } else {
                 setGenStatus({ msg: i18n.regenZero, color: '#8a4500' });
             }
@@ -391,7 +391,7 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
 
     const selCount = totalSelected(selections);
 
-    const allActive = rowsRef.current.reduce((acc, row) => {
+    const allActive = rows.reduce((acc, row) => {
         if (row.isHomePage) return acc;
         langs.forEach(l => { if (!row.generated.has(l)) acc.push({ uuid: row.uuid, l }); });
         return acc;
@@ -410,7 +410,7 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
 
     const hasOldUrls = reportEntries.some(e => e.oldUrl);
     const actionLabel = { created: i18n.reportCreated, promoted: i18n.reportPromoted, already_correct: i18n.reportCorrect };
-    const actionColor = { created: '#0d6636', promoted: '#1d5278', already_correct: '#595959' };
+    const actionColor = { created: '#0a4d25', promoted: '#1d5278', already_correct: '#4d4d4d' };
 
     return (
         <div className="pl-regen">
@@ -613,7 +613,7 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
                                                 <td style={{ color: actionColor[e.action] || '#4d4d4d', whiteSpace: 'nowrap' }}>
                                                     {actionLabel[e.action] || e.action}
                                                 </td>
-                                                {hasOldUrls && <td style={{ fontFamily: 'monospace', color: '#595959' }}>{e.oldUrl || '—'}</td>}
+                                                {hasOldUrls && <td style={{ fontFamily: 'monospace', color: '#4d4d4d' }}>{e.oldUrl || '—'}</td>}
                                                 <td style={{ fontFamily: 'monospace' }}>{e.url}</td>
                                             </tr>
                                         ))}

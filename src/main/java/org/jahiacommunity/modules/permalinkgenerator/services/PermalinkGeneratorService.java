@@ -76,7 +76,8 @@ public class PermalinkGeneratorService {
     private static final String MIXIN_NAV_MENU_ITEM       = "jmix:navMenuItem";
     private static final String NT_FILE                   = "jnt:file";
     private static final String SITES_PREFIX              = "/sites/";
-    private static final String MIXIN_MARKED_FOR_DELETION = "jmix:markedForDeletion";
+    private static final String MIXIN_MARKED_FOR_DELETION      = "jmix:markedForDeletion";
+    private static final String MIXIN_MARKED_FOR_DELETION_ROOT = "jmix:markedForDeletionRoot";
 
     private static final Slugify SLUGIFY = new Slugify();
     private static final int MAX_URL_ATTEMPTS = 10;
@@ -764,7 +765,7 @@ public class PermalinkGeneratorService {
 
     private void unmarkForDeletion(JCRNodeWrapper node, JCRSessionWrapper session) throws RepositoryException {
         boolean changed = false;
-        if (node.isNodeType("jmix:markedForDeletionRoot")) { node.removeMixin("jmix:markedForDeletionRoot"); changed = true; }
+        if (node.isNodeType(MIXIN_MARKED_FOR_DELETION_ROOT)) { node.removeMixin(MIXIN_MARKED_FOR_DELETION_ROOT); changed = true; }
         if (node.isNodeType(MIXIN_MARKED_FOR_DELETION))    { node.removeMixin(MIXIN_MARKED_FOR_DELETION);    changed = true; }
         if (changed) {
             session.save();

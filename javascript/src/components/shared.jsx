@@ -75,7 +75,7 @@ export function LoadMore({ scanning, label, status, onClick }) {
                 {label}
             </button>
             {status && (
-                <span role="status" aria-live="polite" style={{ fontSize: '0.75rem', color: '#595959', marginLeft: 8 }}>
+                <span role="status" aria-live="polite" style={{ fontSize: '0.75rem', color: '#4d4d4d', marginLeft: 8 }}>
                     {status}
                 </span>
             )}

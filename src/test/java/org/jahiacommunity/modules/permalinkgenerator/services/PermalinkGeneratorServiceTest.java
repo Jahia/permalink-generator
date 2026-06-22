@@ -386,6 +386,39 @@ class PermalinkGeneratorServiceTest {
             assertThatCode(() -> service.removePermalinkMixin(nodeFact, null))
                     .doesNotThrowAnyException();
         }
+
+        @Test
+        @DisplayName("regression A-ARCH1: system-session write keeps mixin; editor write on mixin-bearing node removes it")
+        void reEntrancyGuard_bothBranches_inSequence() throws Exception {
+            // --- branch A: system-session write (module itself) must NOT strip the mixin ---
+            JCRNodeWrapper systemVanityNode = mock(JCRNodeWrapper.class);
+            JCRSessionWrapper systemSession = mock(JCRSessionWrapper.class);
+            AddedNodeFact systemFact = mock(AddedNodeFact.class);
+
+            when(systemFact.getNode()).thenReturn(systemVanityNode);
+            when(systemVanityNode.getSession()).thenReturn(systemSession);
+            when(systemSession.isSystem()).thenReturn(true);
+
+            service.removePermalinkMixin(systemFact, null);
+
+            verify(systemVanityNode, never()).removeMixin(anyString());
+            verify(systemSession, never()).save();
+
+            // --- branch B: editor (non-system) session on a mixin-bearing node MUST strip it ---
+            JCRNodeWrapper editorVanityNode = mock(JCRNodeWrapper.class);
+            JCRSessionWrapper editorSession = mock(JCRSessionWrapper.class);
+            AddedNodeFact editorFact = mock(AddedNodeFact.class);
+
+            when(editorFact.getNode()).thenReturn(editorVanityNode);
+            when(editorVanityNode.getSession()).thenReturn(editorSession);
+            when(editorSession.isSystem()).thenReturn(false);
+            when(editorVanityNode.isNodeType("jmix:permalinkGenerated")).thenReturn(true);
+
+            service.removePermalinkMixin(editorFact, null);
+
+            verify(editorVanityNode).removeMixin("jmix:permalinkGenerated");
+            verify(editorSession).save();
+        }
     }
 
     // =========================================================================

@@ -190,7 +190,7 @@ describe('RegenPanel', () => {
         cy.contains('Regeneration report').should('be.visible');
         // Generation issues one POST per language chunk; each returns the
         // 2-entry action-regen.json fixture (EN + FR chunks → 4 report rows).
-        cy.get('.pl-regen table').last().find('tbody tr').should('have.length.greaterThan', 1);
+        cy.get('.pl-regen table').last().find('tbody tr').should('have.length', 4);
     });
 
     it('report table rows show "Created" action label', () => {

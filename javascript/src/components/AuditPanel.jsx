@@ -72,7 +72,7 @@ export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths
             const nodes = [];
             const errors = [];
             const nodesOf = data => {
-                try { return data.data.jcr.nodesByQuery.nodes || []; } catch (e) { return []; }
+                try { return data.data.jcr.nodesByQuery.nodes || []; } catch (e) { console.warn(e); return []; }
             };
             for (const data of [r1, r2]) {
                 if (data.errors) { errors.push(...data.errors.map(e => e.message)); continue; }
@@ -126,9 +126,9 @@ export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths
             }
 
             if (missing === 0 && !more) {
-                setScanStatus({ msg: i18n.allGood.replace('{0}', total), color: '#0d6636' });
+                setScanStatus({ msg: i18n.allGood.replace('{0}', total), color: '#0a4d25' });
             } else {
-                setScanStatus({ msg: i18n.scanned.replace('{0}', total).replace('{1}', missing), color: missing > 0 ? '#333' : '#0d6636' });
+                setScanStatus({ msg: i18n.scanned.replace('{0}', total).replace('{1}', missing), color: missing > 0 ? '#333' : '#0a4d25' });
                 setShowResults(true);
             }
         } catch(e) {
@@ -253,7 +253,7 @@ export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths
             } else if (errorCount > 0) {
                 setGenStatus({ msg: i18n.genError.replace('{0}', '?').replace('{1}', '—'), color: '#922b21' });
             } else if (done > 0) {
-                setGenStatus({ msg: i18n.genSuccess.replace('{0}', done), color: '#0d6636' });
+                setGenStatus({ msg: i18n.genSuccess.replace('{0}', done), color: '#0a4d25' });
             } else {
                 setGenStatus({ msg: i18n.genZero, color: '#8a4500' });
             }
@@ -263,7 +263,7 @@ export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths
 
     const selCount = totalSelected(selections);
 
-    const allMissing = rowsRef.current.reduce((acc, row) => {
+    const allMissing = rows.reduce((acc, row) => {
         if (row.isHomePage) return acc;
         row.missing.forEach(l => { if (!row.generated.has(l)) acc.push({ uuid: row.uuid, l }); });
         return acc;

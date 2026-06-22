@@ -1,0 +1,47 @@
+
+
+
+
+                                     ____.
+                         __/\ ______|    |__/\.     _______
+              __   .____|    |       \   |    +----+       \
+      _______|  /--|    |    |    -   \  _    |    :    -   \_________
+     \\______: :---|    :    :           |    :    |         \________>
+             |__\---\_____________:______:    :____|____:_____\
+                                        /_____|
+
+
+                    . . . s t a r t i n g   j a h i a . . .
+
+                        v e r s i o n   :   @VERSION@
+                      c o d e  n a m e  :   @CODENAME@
+                          b u i l d     :   @BUILD_NUMBER@
+                           d a t e      :    @BUILD_DATE@
+
+
+   Copyright 2002-@YEAR@ - Jahia Solutions Group SA http://www.jahia.com - All Rights Reserved
+
+
+ *******************************************************************************
+ * This program is free software: you can redistribute it and/or modify        *
+ * it under the terms of the GNU General Public License as published by        *
+ * the Free Software Foundation, either version 3 of the License, or           *
+ * (at your option) any later version.                                         *
+ *                                                                             *
+ * This program is distributed in the hope that it will be useful,             *
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of              *
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the                *
+ * GNU General Public License for more details.                                *
+ *                                                                             *
+ * You should have received a copy of the GNU General Public License           *
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.        *
+ *                                                                             *
+ * Commercial and Supported Versions of the program (dual licensing):          *
+ * Alternatively, commercial and supported versions - also known as            *
+ * Enterprise Distributions - of the program must be used in accordance        *
+ * with the terms and conditions contained in a separate written agreement     *
+ * between you and Jahia Solutions Group SA.                                   *
+ *                                                                             *
+ * For more information about Jahia Software licensing, please contact us      *
+ * at legal@jahia.com or go to http://www.jahia.com/license                    *
+ *******************************************************************************
