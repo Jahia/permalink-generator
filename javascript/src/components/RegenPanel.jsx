@@ -1,38 +1,48 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { gql, postAction } from '../utils/api';
-
-const BATCH = 100;
-const CHUNK = 20;
-
-const GQL_QUERY = 'query($q:String!,$lim:Int!,$off:Int!){jcr{nodesByQuery(query:$q,queryLanguage:SQL2,limit:$lim,offset:$off){nodes{uuid path displayName isHomePage:property(name:"j:isHomePage"){value} vanityUrls{url language active default}}}}}';
-
-function hasActiveDefault(vanityUrls, lang) {
-    return (vanityUrls || []).some(v => v.language === lang && v.active && v['default']);
-}
-
-function isExcludedBySettings(nodePath, excludedPaths) {
-    return excludedPaths.some(ep => ep && nodePath.startsWith(ep));
-}
-
-function LegendItem({ cls, label }) {
-    return (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-            <span className={'pl-pill ' + cls} style={{ cursor: 'default', pointerEvents: 'none' }} aria-hidden="true">XX</span>
-            <span style={{ color: '#555' }}>{label}</span>
-        </span>
-    );
-}
+import {
+    BATCH, CHUNK, GQL_QUERY,
+    hasActiveDefault, isExcludedBySettings,
+    selectCell, deselectCell, totalSelected
+} from '../utils/permalink';
+import { LegendItem, ProgressBar, PillCell, LoadMore } from './shared';
 
 function ConfirmModal({ show, i18n, onCancel, onConfirm }) {
     const modalRef = useRef(null);
+    const triggerRef = useRef(null);
 
+    // Capture the element that had focus when the dialog opened, then move
+    // focus into the dialog; restore focus to the trigger on close (SC 2.4.3).
     useEffect(() => {
-        if (show && modalRef.current) modalRef.current.focus();
+        if (show) {
+            triggerRef.current = document.activeElement;
+            if (modalRef.current) modalRef.current.focus();
+        } else if (triggerRef.current && typeof triggerRef.current.focus === 'function') {
+            triggerRef.current.focus();
+            triggerRef.current = null;
+        }
     }, [show]);
 
+    // Escape to cancel + Tab/Shift+Tab focus trap confined to the dialog (SC 2.1.2).
     useEffect(() => {
-        if (!show) return;
-        const onKey = e => { if (e.key === 'Escape') onCancel(); };
+        if (!show) return undefined;
+        const onKey = e => {
+            if (e.key === 'Escape') { onCancel(); return; }
+            if (e.key !== 'Tab' || !modalRef.current) return;
+            const focusable = modalRef.current.querySelectorAll(
+                'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
+            );
+            if (focusable.length === 0) { e.preventDefault(); modalRef.current.focus(); return; }
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            const active = document.activeElement;
+            if (e.shiftKey) {
+                if (active === first || active === modalRef.current) { e.preventDefault(); last.focus(); }
+            } else if (active === last) {
+                e.preventDefault();
+                first.focus();
+            }
+        };
         document.addEventListener('keydown', onKey);
         return () => document.removeEventListener('keydown', onKey);
     }, [show, onCancel]);
@@ -78,11 +88,11 @@ function ConfirmModal({ show, i18n, onCancel, onConfirm }) {
 export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths, actionUrl, i18n }) {
     const [bypassExcluded, setBypassExcluded] = useState(false);
     const [scanning, setScanning] = useState(false);
-    const [scanStatus, setScanStatus] = useState({ msg: '', color: '#666' });
+    const [scanStatus, setScanStatus] = useState({ msg: '', color: '#4d4d4d' });
     const [showResults, setShowResults] = useState(false);
     const [rows, setRows] = useState([]);
     const [selections, setSelections] = useState({});
-    const [genStatus, setGenStatus] = useState({ msg: '', color: '#666' });
+    const [genStatus, setGenStatus] = useState({ msg: '', color: '#4d4d4d' });
     const [generating, setGenerating] = useState(false);
     const [progress, setProgress] = useState(0);
     const [showProgress, setShowProgress] = useState(false);
@@ -92,35 +102,24 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
     const [showLegend, setShowLegend] = useState(false);
     const [reportEntries, setReportEntries] = useState([]);
 
-    const offsetRef = useRef(0);
+    // Independent per-query offsets to avoid pagination drift.
+    const offsetPageRef = useRef(0);
+    const offsetMixinRef = useRef(0);
     const totalScannedRef = useRef(0);
     const rowsRef = useRef([]);
     const selectionsRef = useRef({});
-
-    function totalSelected(sels) {
-        return Object.values(sels).reduce((n, s) => n + s.size, 0);
-    }
-
-    function selectCell(sels, uuid, lang) {
-        const next = { ...sels };
-        if (!next[uuid]) next[uuid] = new Set();
-        else next[uuid] = new Set(next[uuid]);
-        next[uuid].add(lang);
-        return next;
-    }
-    function deselectCell(sels, uuid, lang) {
-        if (!sels[uuid]) return sels;
-        const next = { ...sels };
-        next[uuid] = new Set(next[uuid]);
-        next[uuid].delete(lang);
-        if (next[uuid].size === 0) delete next[uuid];
-        return next;
-    }
+    // In-flight guard (replaces the stale `scanning`-in-deps guard).
+    const inFlightRef = useRef(false);
+    // Read bypassExcluded through a ref so the memoized doScan always sees the
+    // latest value without being re-created on every checkbox toggle.
+    const bypassExcludedRef = useRef(bypassExcluded);
+    useEffect(() => { bypassExcludedRef.current = bypassExcluded; }, [bypassExcluded]);
 
     const doScan = useCallback(async (reset) => {
-        if (scanning) return;
+        if (inFlightRef.current) return;
         if (reset) {
-            offsetRef.current = 0;
+            offsetPageRef.current = 0;
+            offsetMixinRef.current = 0;
             totalScannedRef.current = 0;
             rowsRef.current = [];
             selectionsRef.current = {};
@@ -132,39 +131,47 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
             setReportEntries([]);
         }
 
+        inFlightRef.current = true;
         setScanning(true);
-        setScanStatus({ msg: i18n.scanRunning, color: '#666' });
+        setScanStatus({ msg: i18n.scanRunning, color: '#4d4d4d' });
 
         const escapedPath = sitePath.replace(/'/g, "''");
         const qPage  = `SELECT * FROM [jnt:page] AS n WHERE ISDESCENDANTNODE(n, '${escapedPath}')`;
         const qMixin = `SELECT * FROM [jmix:mainResource] AS n WHERE ISDESCENDANTNODE(n, '${escapedPath}')`;
-        const off = offsetRef.current;
+        const offPage = offsetPageRef.current;
+        const offMixin = offsetMixinRef.current;
+        const bypass = bypassExcludedRef.current;
 
         try {
             const [r1, r2] = await Promise.all([
-                gql(contextPath, { query: GQL_QUERY, variables: { q: qPage, lim: BATCH, off } }),
-                gql(contextPath, { query: GQL_QUERY, variables: { q: qMixin, lim: BATCH, off } })
+                gql(contextPath, { query: GQL_QUERY, variables: { q: qPage, lim: BATCH, off: offPage } }),
+                gql(contextPath, { query: GQL_QUERY, variables: { q: qMixin, lim: BATCH, off: offMixin } })
             ]);
 
             const seen = {};
             const nodes = [];
             const errors = [];
+            const nodesOf = data => {
+                try { return data.data.jcr.nodesByQuery.nodes || []; } catch (e) { return []; }
+            };
             for (const data of [r1, r2]) {
                 if (data.errors) { errors.push(...data.errors.map(e => e.message)); continue; }
-                try { (data.data.jcr.nodesByQuery.nodes || []).forEach(n => { if (!seen[n.uuid]) { seen[n.uuid] = true; nodes.push(n); } }); } catch(e) {}
+                nodesOf(data).forEach(n => { if (!seen[n.uuid]) { seen[n.uuid] = true; nodes.push(n); } });
             }
 
             if (errors.length && nodes.length === 0) {
-                setScanStatus({ msg: i18n.errorGraphql.replace('{0}', errors.join('; ')), color: '#c0392b' });
-                setScanning(false);
+                setScanStatus({ msg: i18n.errorGraphql.replace('{0}', errors.join('; ')), color: '#922b21' });
                 return;
             }
 
-            const more = [r1, r2].some(data => { try { return (data.data.jcr.nodesByQuery.nodes || []).length === BATCH; } catch(e) { return false; } });
-            totalScannedRef.current += nodes.length;
-            offsetRef.current += BATCH;
+            const pageFull = nodesOf(r1).length === BATCH;
+            const mixinFull = nodesOf(r2).length === BATCH;
+            if (pageFull) offsetPageRef.current += BATCH;
+            if (mixinFull) offsetMixinRef.current += BATCH;
+            const more = pageFull || mixinFull;
 
-            const bypass = bypassExcluded;
+            totalScannedRef.current += nodes.length;
+
             const candidates = nodes.filter(n => bypass || !isExcludedBySettings(n.path, excludedPaths));
 
             // Preview call
@@ -242,8 +249,9 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
             setSelections({ ...newSels });
             setHasMore(more);
 
+            const scannedSoFar = Math.max(offsetPageRef.current, offsetMixinRef.current);
             if (more) {
-                setLoadMoreStatus(i18n.loadMoreSt.replace('{0}', offsetRef.current).replace('{1}', rowsRef.current.length));
+                setLoadMoreStatus(i18n.loadMoreSt.replace('{0}', scannedSoFar).replace('{1}', rowsRef.current.length));
             } else {
                 setLoadMoreStatus('');
             }
@@ -251,11 +259,12 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
             setScanStatus({ msg: i18n.regenScanned.replace('{0}', totalScannedRef.current).replace('{1}', rowsRef.current.length), color: '#333' });
             setShowResults(true);
         } catch(e) {
-            setScanStatus({ msg: i18n.errorNetwork.replace('{0}', e.message || '?'), color: '#c0392b' });
+            setScanStatus({ msg: i18n.errorNetwork.replace('{0}', e.message || '?'), color: '#922b21' });
         } finally {
+            inFlightRef.current = false;
             setScanning(false);
         }
-    }, [scanning, sitePath, contextPath, langs, excludedPaths, bypassExcluded, actionUrl, i18n]);
+    }, [sitePath, contextPath, langs, excludedPaths, actionUrl, i18n]);
 
     function toggleCell(uuid, lang) {
         setSelections(prev => {
@@ -318,11 +327,11 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
 
         const total = totalSelected(selections);
         let done = 0;
-        let hadError = false;
+        let errorCount = 0;
         const entries = [];
 
         setGenerating(true);
-        setGenStatus({ msg: '', color: '#666' });
+        setGenStatus({ msg: '', color: '#4d4d4d' });
         setShowProgress(true);
         setProgress(0);
         setReportEntries([]);
@@ -341,12 +350,15 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
                         const data = await postAction(actionUrl, params);
                         const chunkResults = (data && data.results) || [];
                         chunkResults.forEach(r => {
-                            entries.push({ path: r.path, language: lang, action: r.action, url: r.url, oldUrl: r.oldUrl || '' });
+                            entries.push({ uuid: r.uuid, path: r.path, language: lang, action: r.action, url: r.url, oldUrl: r.oldUrl || '' });
                         });
-                        for (const uuid of chunk) {
-                            const row = rowsRef.current.find(r => r.uuid === uuid);
-                            if (row) row.generated.add(lang);
-                        }
+                        // Fresh row objects with a new Set rather than in-place mutation.
+                        rowsRef.current = rowsRef.current.map(row => {
+                            if (!chunk.includes(row.uuid)) return row;
+                            const generated = new Set(row.generated);
+                            generated.add(lang);
+                            return { ...row, generated };
+                        });
                         setSelections(prev => {
                             let next = { ...prev };
                             chunk.forEach(uuid => { next = deselectCell(next, uuid, lang); });
@@ -356,18 +368,22 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
                         setProgress(Math.min(1, done / total));
                         setRows([...rowsRef.current]);
                     } catch(e) {
-                        hadError = true;
-                        setGenStatus({ msg: i18n.regenError.replace('{0}', e.status || '?').replace('{1}', lang), color: '#c0392b' });
+                        errorCount += chunk.length;
+                        setGenStatus({ msg: i18n.regenError.replace('{0}', e.status || '?').replace('{1}', lang), color: '#922b21' });
                     }
                 }
             }
         } finally {
             setShowProgress(false);
             setReportEntries([...entries]);
-            if (done > 0) {
-                setGenStatus({ msg: i18n.regenSuccess.replace('{0}', done), color: '#27ae60' });
-            } else if (!hadError) {
-                setGenStatus({ msg: i18n.regenZero, color: '#e67e22' });
+            if (errorCount > 0 && done > 0) {
+                setGenStatus({ msg: i18n.regenPartial.replace('{0}', done).replace('{1}', errorCount), color: '#8a4500' });
+            } else if (errorCount > 0) {
+                setGenStatus({ msg: i18n.regenError.replace('{0}', '?').replace('{1}', '—'), color: '#922b21' });
+            } else if (done > 0) {
+                setGenStatus({ msg: i18n.regenSuccess.replace('{0}', done), color: '#0d6636' });
+            } else {
+                setGenStatus({ msg: i18n.regenZero, color: '#8a4500' });
             }
             setGenerating(false);
         }
@@ -382,9 +398,19 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
     }, []);
     const allSelected = allActive.length > 0 && allActive.every(item => selections[item.uuid] && selections[item.uuid].has(item.l));
 
+    // Per-column "all selected" state, hoisted out of render's inline IIFE.
+    const colAllSelected = useMemo(() => {
+        const map = {};
+        langs.forEach(lang => {
+            const colActive = rows.filter(r => !r.generated.has(lang) && !r.isHomePage);
+            map[lang] = colActive.length > 0 && colActive.every(r => selections[r.uuid] && selections[r.uuid].has(lang));
+        });
+        return map;
+    }, [langs, rows, selections]);
+
     const hasOldUrls = reportEntries.some(e => e.oldUrl);
     const actionLabel = { created: i18n.reportCreated, promoted: i18n.reportPromoted, already_correct: i18n.reportCorrect };
-    const actionColor = { created: '#27ae60', promoted: '#3c8cba', already_correct: '#888' };
+    const actionColor = { created: '#0d6636', promoted: '#1d5278', already_correct: '#595959' };
 
     return (
         <div className="pl-regen">
@@ -403,7 +429,7 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
             <p className="text-muted">{i18n.regenDesc}</p>
 
             <div id="plRegenLegend" className={'pl-legend-wrap' + (showLegend ? ' open' : '')}>
-                <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', padding: '0 0 16px', fontSize: 12 }}>
+                <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', padding: '0 0 16px', fontSize: '0.75rem' }}>
                     <LegendItem cls="pl-pill-miss"   label={i18n.pillMissing} />
                     <LegendItem cls="pl-pill-stale"  label={i18n.pillStale} />
                     <LegendItem cls="pl-pill-manual" label={i18n.pillManual} />
@@ -423,7 +449,7 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
                     >
                         <i className="icon-search" aria-hidden="true"></i> {i18n.regenScan}
                     </button>
-                    <label style={{ margin: 0, fontWeight: 'normal', fontSize: 13 }}>
+                    <label style={{ margin: 0, fontWeight: 'normal', fontSize: '0.8125rem' }}>
                         <input
                             type="checkbox"
                             checked={bypassExcluded}
@@ -432,14 +458,14 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
                         />
                         {i18n.regenBypass}
                     </label>
-                    <span role="status" aria-live="polite" style={{ fontSize: 12, color: scanStatus.color }}>{scanStatus.msg}</span>
+                    <span role="status" aria-live="polite" style={{ fontSize: '0.75rem', color: scanStatus.color }}>{scanStatus.msg}</span>
                 </div>
             </div>
 
             {showResults && (
                 <div style={{ marginTop: 16 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
-                        <span aria-live="polite" style={{ fontSize: 13, fontWeight: 'bold' }}>
+                        <span role="status" aria-live="polite" style={{ fontSize: '0.8125rem', fontWeight: 'bold' }}>
                             {i18n.regenSummary.replace('{0}', rows.length)}
                         </span>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -451,28 +477,19 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
                             >
                                 <i className="icon-cog icon-white" aria-hidden="true"></i> {i18n.regenGenerate} ({selCount})
                             </button>
-                            <span role="status" aria-live="polite" style={{ fontSize: 12, color: genStatus.color }}>{genStatus.msg}</span>
+                            <span role="status" aria-live="polite" style={{ fontSize: '0.75rem', color: genStatus.color }}>{genStatus.msg}</span>
                         </div>
                     </div>
 
                     {showProgress && (
-                        <div
-                            className="pl-progress-wrap"
-                            role="progressbar"
-                            aria-valuenow={Math.round(progress * 100)}
-                            aria-valuemin={0}
-                            aria-valuemax={100}
-                            aria-label={i18n.scanRunning}
-                        >
-                            <div className="pl-progress-bar" style={{ transform: `scaleX(${progress})` }} aria-hidden="true"></div>
-                        </div>
+                        <ProgressBar progress={progress} label={i18n.generating} />
                     )}
 
                     <div style={{ overflowX: 'auto' }}>
                         <table className="pl-audit-table">
                             <thead>
                                 <tr>
-                                    <th style={{ width: 28 }}>
+                                    <th scope="col" style={{ width: 28 }}>
                                         <input
                                             type="checkbox"
                                             aria-label={i18n.auditSelectAll}
@@ -480,18 +497,15 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
                                             onChange={e => toggleSelectAll(e.target.checked)}
                                         />
                                     </th>
-                                    <th>{i18n.auditColPath}</th>
+                                    <th scope="col">{i18n.auditColPath}</th>
                                     {langs.map(lang => (
-                                        <th key={lang} className="pl-lang-th" data-lang={lang}>
+                                        <th scope="col" key={lang} className="pl-lang-th" data-lang={lang}>
                                             {lang.toUpperCase()}<br/>
                                             <input
                                                 type="checkbox"
                                                 style={{ margin: '2px 0 0 0' }}
                                                 aria-label={i18n.colLangTitle.replace('{0}', lang.toUpperCase())}
-                                                checked={(() => {
-                                                    const colActive = rows.filter(r => !r.generated.has(lang) && !r.isHomePage);
-                                                    return colActive.length > 0 && colActive.every(r => selections[r.uuid] && selections[r.uuid].has(lang));
-                                                })()}
+                                                checked={!!colAllSelected[lang]}
                                                 onChange={e => { e.stopPropagation(); toggleColLang(lang, e.target.checked); }}
                                             />
                                         </th>
@@ -519,7 +533,7 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
                                             </td>
                                             <td
                                                 title={row.path}
-                                                style={{ fontFamily: 'monospace', fontSize: 11, color: '#666', maxWidth: 380, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                                                style={{ fontFamily: 'monospace', fontSize: '0.6875rem', color: '#4d4d4d', maxWidth: 380, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                                             >
                                                 {row.path}
                                             </td>
@@ -546,20 +560,15 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
                                                 if (row.hasNoTitle) { cls += ' pl-notitle'; pillLabel += ' — ' + i18n.pillNoTitle; }
                                                 const isPressed = !!(selections[row.uuid] && selections[row.uuid].has(lang));
                                                 return (
-                                                    <td key={lang} style={{ textAlign: 'center' }}>
-                                                        <span
-                                                            className={cls}
-                                                            title={pillLabel}
-                                                            role={clickable ? 'button' : undefined}
-                                                            tabIndex={clickable ? 0 : undefined}
-                                                            aria-pressed={clickable ? isPressed : undefined}
-                                                            aria-label={clickable ? `${lang.toUpperCase()} — ${pillLabel}` : undefined}
-                                                            onClick={clickable ? () => toggleCell(row.uuid, lang) : undefined}
-                                                            onKeyDown={clickable ? e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleCell(row.uuid, lang); } } : undefined}
-                                                        >
-                                                            {lang}
-                                                        </span>
-                                                    </td>
+                                                    <PillCell
+                                                        key={lang}
+                                                        cls={cls}
+                                                        lang={lang}
+                                                        pillLabel={pillLabel}
+                                                        clickable={clickable}
+                                                        pressed={isPressed}
+                                                        onToggle={() => toggleCell(row.uuid, lang)}
+                                                    />
                                                 );
                                             })}
                                         </tr>
@@ -570,45 +579,41 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
                     </div>
 
                     {hasMore && (
-                        <div style={{ textAlign: 'center', marginTop: 12 }}>
-                            <button className="btn" onClick={() => doScan(false)} disabled={scanning} aria-busy={scanning}>
-                                {i18n.auditLoadMore}
-                            </button>
-                            {loadMoreStatus && (
-                                <span role="status" aria-live="polite" style={{ fontSize: 12, color: '#777', marginLeft: 8 }}>
-                                    {loadMoreStatus}
-                                </span>
-                            )}
-                        </div>
+                        <LoadMore
+                            scanning={scanning}
+                            label={i18n.auditLoadMore}
+                            status={loadMoreStatus}
+                            onClick={() => doScan(false)}
+                        />
                     )}
 
                     {reportEntries.length > 0 && (
                         <div style={{ marginTop: 20 }}>
-                            <h4 style={{ margin: '0 0 8px 0', fontSize: 14 }}>{i18n.reportTitle}</h4>
+                            <h4 style={{ margin: '0 0 8px 0', fontSize: '0.875rem' }}>{i18n.reportTitle}</h4>
                             <div style={{ overflowX: 'auto' }}>
-                                <table className="pl-audit-table" style={{ fontSize: 11 }}>
+                                <table className="pl-audit-table" style={{ fontSize: '0.6875rem' }}>
                                     <thead>
                                         <tr>
-                                            <th style={{ width: 44 }}>{i18n.reportColLang}</th>
-                                            <th>{i18n.reportColPath}</th>
-                                            <th>{i18n.reportColAction}</th>
-                                            {hasOldUrls && <th>{i18n.reportColOldUrl}</th>}
-                                            <th>{i18n.reportColNewUrl}</th>
+                                            <th scope="col" style={{ width: 44 }}>{i18n.reportColLang}</th>
+                                            <th scope="col">{i18n.reportColPath}</th>
+                                            <th scope="col">{i18n.reportColAction}</th>
+                                            {hasOldUrls && <th scope="col">{i18n.reportColOldUrl}</th>}
+                                            <th scope="col">{i18n.reportColNewUrl}</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {reportEntries.map((e, idx) => (
-                                            <tr key={idx}>
+                                            <tr key={(e.uuid || e.path) + '-' + e.language + '-' + idx}>
                                                 <td style={{ textAlign: 'center' }}>
                                                     <span className="pl-pill" style={{ background: '#e8eef4', color: '#333' }}>{e.language.toUpperCase()}</span>
                                                 </td>
                                                 <td style={{ fontFamily: 'monospace', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={e.path}>
                                                     {e.path}
                                                 </td>
-                                                <td style={{ color: actionColor[e.action] || '#555', whiteSpace: 'nowrap' }}>
+                                                <td style={{ color: actionColor[e.action] || '#4d4d4d', whiteSpace: 'nowrap' }}>
                                                     {actionLabel[e.action] || e.action}
                                                 </td>
-                                                {hasOldUrls && <td style={{ fontFamily: 'monospace', color: '#999' }}>{e.oldUrl || '—'}</td>}
+                                                {hasOldUrls && <td style={{ fontFamily: 'monospace', color: '#595959' }}>{e.oldUrl || '—'}</td>}
                                                 <td style={{ fontFamily: 'monospace' }}>{e.url}</td>
                                             </tr>
                                         ))}

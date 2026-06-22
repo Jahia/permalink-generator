@@ -34,11 +34,17 @@ import java.util.Map;
  * </ul>
  *
  * <p>Returns JSON: {@code {"results": [...]}} on success, {@code {"error": "..."}} on failure.
+ *
+ * <p>Requires the caller to be authenticated and to hold the {@code siteAdminPermalinkGenerator}
+ * permission on the target site.
  */
 @Component(service = Action.class, immediate = true)
 public class GeneratePermalinksAction extends Action {
 
     private static final Logger logger = LoggerFactory.getLogger(GeneratePermalinksAction.class);
+
+    /** Parameter key for language codes. */
+    private static final String PARAM_LANGUAGE = "language";
 
     @Reference
     private PermalinkGeneratorService permalinkGeneratorService;
@@ -47,6 +53,9 @@ public class GeneratePermalinksAction extends Action {
     public void activate() {
         setName("generatePermalinks");
         setRequiredMethods("POST");
+        // A-SEC1: require an authenticated user and the site-admin permission
+        setRequireAuthenticatedUser(true);
+        setRequiredPermission("siteAdminPermalinkGenerator");
     }
 
     @Override
@@ -65,53 +74,82 @@ public class GeneratePermalinksAction extends Action {
         boolean preview = previewParam != null && !previewParam.isEmpty() && "true".equals(previewParam.get(0));
 
         if (preview) {
-            try {
-                List<String> bypassParam = parameters.get("bypassExcluded");
-                boolean bypassExcluded = bypassParam != null && !bypassParam.isEmpty() && "true".equals(bypassParam.get(0));
-                List<Map<String, String>> results = permalinkGeneratorService.previewVanityForNodeIds(nodeIds, languages, session, bypassExcluded);
-                JSONArray arr = new JSONArray();
-                for (Map<String, String> r : results) {
-                    JSONObject obj = new JSONObject();
-                    obj.put("uuid",        r.get("uuid"));
-                    obj.put("language",    r.get("language"));
-                    obj.put("computedUrl", r.get("computedUrl"));
-                    obj.put("currentUrl",  r.get("currentUrl"));
-                    obj.put("willChange",  "true".equals(r.get("willChange")));
-                    obj.put("isManual",    "true".equals(r.get("isManual")));
-                    arr.put(obj);
-                }
-                JSONObject body = new JSONObject();
-                body.put("results", arr);
-                return new ActionResult(HttpServletResponse.SC_OK, null, body);
-            } catch (Exception e) {
-                logger.error("GeneratePermalinksAction: preview failed — {}", e.getMessage(), e);
-                JSONObject err = new JSONObject();
-                err.put("error", e.getMessage());
-                return new ActionResult(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, null, err);
+            return doPreview(parameters, nodeIds, languages, session);
+        }
+
+        return doGenerate(parameters, nodeIds, languages, session);
+    }
+
+    // -------------------------------------------------------------------------
+    // Preview branch
+    // -------------------------------------------------------------------------
+
+    private ActionResult doPreview(Map<String, List<String>> parameters,
+                                   List<String> nodeIds, List<String> languages,
+                                   JCRSessionWrapper session) {
+        try {
+            List<String> bypassParam = parameters.get("bypassExcluded");
+            boolean bypassExcluded = bypassParam != null && !bypassParam.isEmpty() && "true".equals(bypassParam.get(0));
+            List<Map<String, String>> results = permalinkGeneratorService.previewVanityForNodeIds(nodeIds, languages, session, bypassExcluded);
+            JSONArray arr = new JSONArray();
+            for (Map<String, String> r : results) {
+                JSONObject obj = new JSONObject();
+                obj.put("uuid",        r.get("uuid"));
+                obj.put(PARAM_LANGUAGE, r.get(PARAM_LANGUAGE));
+                obj.put("computedUrl", r.get("computedUrl"));
+                obj.put("currentUrl",  r.get("currentUrl"));
+                obj.put("willChange",  "true".equals(r.get("willChange")));
+                obj.put("isManual",    "true".equals(r.get("isManual")));
+                arr.put(obj);
             }
+            JSONObject body = new JSONObject();
+            body.put("results", arr);
+            return new ActionResult(HttpServletResponse.SC_OK, null, body);
+        } catch (Exception e) {
+            // A-SEC3: log detail server-side; return generic message to client
+            logger.error("GeneratePermalinksAction: preview failed", e);
+            JSONObject err = new JSONObject();
+            err.put("error", "An internal error occurred while computing the preview.");
+            return new ActionResult(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, null, err);
         }
+    }
 
-        List<String> forceParam = parameters.get("force");
-        boolean force = forceParam != null && !forceParam.isEmpty() && "true".equals(forceParam.get(0));
+    // -------------------------------------------------------------------------
+    // Generate branch
+    // -------------------------------------------------------------------------
 
-        logger.info("GeneratePermalinksAction: nodeIds={} languages={} force={}", nodeIds, languages, force);
+    private ActionResult doGenerate(Map<String, List<String>> parameters,
+                                    List<String> nodeIds, List<String> languages,
+                                    JCRSessionWrapper session) {
+        try {
+            List<String> forceParam = parameters.get("force");
+            boolean force = forceParam != null && !forceParam.isEmpty() && "true".equals(forceParam.get(0));
 
-        List<Map<String, String>> results = permalinkGeneratorService.generateVanityForNodeIds(nodeIds, languages, session, force);
-        logger.info("GeneratePermalinksAction: {} operation(s) completed (force={})", results.size(), force);
+            logger.info("GeneratePermalinksAction: nodeIds={} languages={} force={}", nodeIds, languages, force);
 
-        JSONArray arr = new JSONArray();
-        for (Map<String, String> r : results) {
-            JSONObject obj = new JSONObject();
-            obj.put("uuid",     r.get("uuid"));
-            obj.put("path",     r.get("path"));
-            obj.put("language", r.get("language"));
-            obj.put("action",   r.get("action"));
-            obj.put("url",      r.get("url"));
-            obj.put("oldUrl",   r.getOrDefault("oldUrl", ""));
-            arr.put(obj);
+            List<Map<String, String>> results = permalinkGeneratorService.generateVanityForNodeIds(nodeIds, languages, session, force);
+            logger.info("GeneratePermalinksAction: {} operation(s) completed (force={})", results.size(), force);
+
+            JSONArray arr = new JSONArray();
+            for (Map<String, String> r : results) {
+                JSONObject obj = new JSONObject();
+                obj.put("uuid",         r.get("uuid"));
+                obj.put("path",         r.get("path"));
+                obj.put(PARAM_LANGUAGE, r.get(PARAM_LANGUAGE));
+                obj.put("action",       r.get("action"));
+                obj.put("url",          r.get("url"));
+                obj.put("oldUrl",       r.getOrDefault("oldUrl", ""));
+                arr.put(obj);
+            }
+            JSONObject body = new JSONObject();
+            body.put("results", arr);
+            return new ActionResult(HttpServletResponse.SC_OK, null, body);
+        } catch (Exception e) {
+            // A-SEC3: log detail server-side; return generic message to client
+            logger.error("GeneratePermalinksAction: generation failed", e);
+            JSONObject err = new JSONObject();
+            err.put("error", "An internal error occurred while generating permalinks.");
+            return new ActionResult(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, null, err);
         }
-        JSONObject body = new JSONObject();
-        body.put("results", arr);
-        return new ActionResult(HttpServletResponse.SC_OK, null, body);
     }
 }

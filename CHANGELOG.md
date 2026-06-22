@@ -58,7 +58,7 @@ The following rules are new in 2.0.0. They fire automatically with no configurat
 
 ### Testing
 
-- Cypress E2E test suite added — 6 scenarios, 30 tests covering setup/teardown, SMART mode, title rename, audit panel, force-regen (SMART vs FORCE), and manual vanity preservation.
+- Cypress E2E test suite added — 8 scenarios, 29 tests covering setup/teardown, auto-generation, title rename, branch move, audit panel, force-regen (SMART vs FORCE), manual vanity preservation, and cleanup.
 
 ---
 

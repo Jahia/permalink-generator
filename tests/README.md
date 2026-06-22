@@ -38,7 +38,7 @@ By default Cypress targets `http://localhost:8080` with credentials `root / root
 Run a single spec:
 
 ```bash
-yarn e2e:ci --spec "cypress/e2e/04-audit-panel.cy.ts"
+yarn e2e:ci --spec "cypress/e2e/01-auto-generation.cy.ts"
 ```
 
 ## Run with Docker (Jahia community CI standard)
@@ -82,9 +82,9 @@ Tests run in order. Each spec is numbered to express dependencies.
 | Spec | Scenario | What it tests |
 |---|---|---|
 | `00-setup.cy.ts` | Site setup | Creates `plgentest` (module enabled) and `plgenaudit` (pages created before module enable). |
-| `01-vanity-creation.cy.ts` | Auto-generation | Title set → vanity created. Default language has no prefix; non-default prefixed `/fr/`. |
-| `02-vanity-hierarchy.cy.ts` | Hierarchy | Child page vanity inherits parent's path prefix. |
-| `03-vanity-rename-move.cy.ts` | Rename + move | Title change replaces active vanity; move updates prefix, preserves slug; old vanities kept as redirects. |
+| `01-auto-generation.cy.ts` | Auto-generation | Title set → vanity created. Default language has no prefix; non-default prefixed `/fr/`. |
+| `02-title-rename.cy.ts` | Title rename | Page title change replaces active vanity; old URL kept as redirect. |
+| `03-branch-move.cy.ts` | Branch move | Page move updates prefix, preserves slug; all descendants updated; old vanities kept as redirects. |
 | `04-audit-panel.cy.ts` | Audit generation | Pages with no vanity → `generatePermalinks` action creates them in bulk via API. |
 | `05-force-regen.cy.ts` | Force regeneration | SMART mode skips manual vanity; `force=true` overwrites it. |
 | `06-manual-vanity.cy.ts` | SMART mode | Module never overwrites manual vanities on rename; updates prefix on move. |

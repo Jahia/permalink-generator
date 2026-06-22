@@ -25,7 +25,7 @@ export default function SiteSettings({ contextPath, sitePath, currentMode, exclu
                 if (d.errors) {
                     setStatus({ ok: false, msg: d.errors[0].message });
                 } else {
-                    setStatus({ ok: true, msg: '✓ ' + i18n.save });
+                    setStatus({ ok: true, msg: i18n.saveSuccess });
                 }
             })
             .catch(e => setStatus({ ok: false, msg: e.message || i18n.saveError }))
@@ -96,7 +96,7 @@ export default function SiteSettings({ contextPath, sitePath, currentMode, exclu
                     <span
                         role="status"
                         aria-live="polite"
-                        style={{ marginLeft: 12, fontSize: 13, color: status ? (status.ok ? '#27ae60' : '#c0392b') : undefined }}
+                        style={{ marginLeft: 12, fontSize: '0.8125rem', color: status ? (status.ok ? '#0d6636' : '#922b21') : undefined }}
                     >
                         {status ? status.msg : ''}
                     </span>

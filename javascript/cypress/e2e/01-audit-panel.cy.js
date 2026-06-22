@@ -58,7 +58,8 @@ describe('AuditPanel', () => {
         cy.get('#plAuditPath').clear().type('/sites/testsite');
         cy.contains('button', 'Scan').first().click();
         cy.wait('@gqlNodes');
-        cy.contains('td', '/sites/testsite/home')
+        // Match the homepage row exactly (avoid matching /home/about etc.)
+        cy.get('.pl-audit-table tbody td[title="/sites/testsite/home"]')
             .closest('tr')
             .should('have.class', 'pl-row-ignored');
     });

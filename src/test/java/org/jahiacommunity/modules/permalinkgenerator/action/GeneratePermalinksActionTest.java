@@ -280,10 +280,10 @@ class GeneratePermalinksActionTest {
 
             assertThat(result.getResultCode()).isEqualTo(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             assertThat(result.getJson()).isNotNull();
-            String body = result.getJson().toString();
-            assertThat(body).doesNotContain("DB connection lost");
-            assertThat(body).doesNotContain("password=secret");
-            assertThat(body).contains("error");
+            assertThat(result.getJson().toString())
+                    .doesNotContain("DB connection lost")
+                    .doesNotContain("password=secret")
+                    .contains("error");
         }
 
         @Test
@@ -298,9 +298,9 @@ class GeneratePermalinksActionTest {
             ActionResult result = execute(params);
 
             assertThat(result.getResultCode()).isEqualTo(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            String body = result.getJson().toString();
-            assertThat(body).doesNotContain("internal detail that must not leak");
-            assertThat(body).contains("error");
+            assertThat(result.getJson().toString())
+                    .doesNotContain("internal detail that must not leak")
+                    .contains("error");
         }
     }
 

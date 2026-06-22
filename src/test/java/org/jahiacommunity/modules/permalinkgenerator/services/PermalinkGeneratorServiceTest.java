@@ -18,6 +18,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
@@ -378,12 +379,12 @@ class PermalinkGeneratorServiceTest {
 
         @Test
         @DisplayName("null vanity node -> no exception thrown")
-        void nullVanityNode_noException() throws Exception {
+        void nullVanityNode_noException() {
             AddedNodeFact nodeFact = mock(AddedNodeFact.class);
             when(nodeFact.getNode()).thenReturn(null);
 
-            service.removePermalinkMixin(nodeFact, null);
-            // no assertion needed — must not throw
+            assertThatCode(() -> service.removePermalinkMixin(nodeFact, null))
+                    .doesNotThrowAnyException();
         }
     }
 
