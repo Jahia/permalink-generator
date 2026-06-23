@@ -7,7 +7,7 @@ export function LegendItem({ cls, label }) {
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
             <span
                 className={'pl-pill ' + cls}
-                style={{ cursor: 'default', pointerEvents: 'none' }}
+                style={{ cursor: 'default', pointerEvents: 'none', minWidth: 28, minHeight: 'unset', padding: '2px 5px' }}
                 aria-hidden="true"
             >XX</span>
             <span style={{ color: '#4d4d4d' }}>{label}</span>
