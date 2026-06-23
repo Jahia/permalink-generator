@@ -6,6 +6,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [2.0.1] — 2026-06-23
+
+### Security
+
+- **Action endpoint authentication** — `GeneratePermalinksAction` now explicitly requires an authenticated user and the `siteAdminPermalinkGenerator` permission. Previously these checks were not enforced at the action level.
+- **Exception details no longer leaked** — internal error messages are no longer returned to the client; a generic message is returned and the detail is logged server-side.
+
+### Fixed
+
+- **Drools re-entrancy guard** — `removePermalinkMixin()` now skips writes when called from a system session, preventing an infinite loop when Drools processes module-initiated saves.
+- **`isPublishedInLive()` error handling** — unexpected `RepositoryException` (other than `ItemNotFoundException`) now preserves the vanity (returns `true`) instead of incorrectly treating it as unpublished.
+- **CSS — help button size** — `.pl-help-btn` was rendered at 44×44 px (touch-target overshoot for a mouse-driven admin panel); restored to 20×20 px.
+- **CSS — legend pills** — decorative `aria-hidden` pills in the legend were inheriting the 44 px `min-width` from `.pl-pill`; overridden to compact size.
+
+### Changed
+
+- `saveVanityWithMixin()` split into `addMixinToSavedVanity()` — single save per operation closes a create/save re-entrancy window.
+- Many magic strings extracted to named constants in `PermalinkGeneratorService`.
+
+---
+
 ## [2.0.0] — 2026-06-18
 
 The goal of this module has always been that editors should never have to think about vanity URLs — they should just exist and stay correct as the site evolves. Version 1.0.x achieved this for the creation case only. The gap was everything that happens *after* a page is created: renames, moves, restructures. Every one of those operations left a stale URL behind. Version 2.0.0 closes that gap entirely, and adds a full admin panel so site administrators can audit and control vanity URL state across the site at any time.
