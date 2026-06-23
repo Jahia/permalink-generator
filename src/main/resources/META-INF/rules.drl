@@ -1,3 +1,10 @@
+// DSL dependency note:
+// This file uses 'expander rules.dsl' for consequence-side templates defined in this module's
+// rules.dsl. The condition-side DSL patterns (e.g. 'A property X has been set on a node',
+// 'A node is moved', 'A node is deleted', 'A node is a top copy', '- not in operation X')
+// are provided by Jahia core's built-in DSL (org.jahia.defaults/jahia-rules.dsl), which is
+// loaded automatically by the Jahia rules engine. This module has an implicit runtime dependency
+// on those Jahia core DSL definitions.
 package org.jahiacommunity.modules.permalinkgenerator.rules
 
 import org.jahia.services.content.rules.*
@@ -16,7 +23,13 @@ global PermalinkGeneratorService permalinkGeneratorService
 global JCRSessionWrapper session
 
 
+// Fires on every jcr:title write (rename, new page).
+// Excluded during import to avoid conflicts with imported content.
+// Excluded during copy because the 'Strip inherited module-managed vanities on page copy' rule
+// handles the copy case (copy inherits the source vanity, which is then stripped and regenerated).
+// Business reason: keeps the vanity URL in sync with the page's display title.
 rule "Create or update permanent URL on jcr:title set"
+    salience 10
 when
     A property jcr:title has been set on a node
     - not in operation import
@@ -25,7 +38,11 @@ then
     Create permanent URL for node node and language property.getLanguage()
 end
 
+// Fires when a page or content node is moved within the tree.
+// Excluded during import because the imported structure already carries its own vanities.
+// Business reason: the vanity URL path should reflect the node's current location in the tree.
 rule "Recreate permanent URLs on node move"
+    salience 5
 when
     A node is moved
     - not in operation import
@@ -33,7 +50,11 @@ then
     Recreate permanent URLs for moved node node
 end
 
+// Fires when a page or content node is deleted.
+// Excluded during import to avoid removing vanities that belong to imported content.
+// Business reason: prevents orphaned vanity URL nodes after the target page is removed.
 rule "Clean permanent URLs on node deletion"
+    salience 5
 when
     A node is deleted
     - not in operation import
@@ -41,14 +62,29 @@ then
     Clean permanent URLs for deleted node node
 end
 
+// Fires only on 'top copy' (the root of a copy operation, not every copied descendant).
+// Business reason: the copied page must not inherit the source page's module-managed vanity URLs
+// because two pages sharing the same vanity would create a conflict. Stripping them here causes
+// the 'Create or update permanent URL on jcr:title set' rule to regenerate a fresh vanity
+// when jcr:title is next written on the copy.
 rule "Strip inherited module-managed vanities on page copy"
+    salience 5
 when
     A node is a top copy
 then
     Strip copied vanities for node node
 end
 
+// Fires when an editor manually sets j:url on a vanity URL node.
+// Excluded during import and copy to avoid falsely marking imported/copied vanities as manual.
+// Business reason: when a human overwrites the module-generated URL, the jmix:permalinkGenerated
+// mixin must be removed so the module no longer manages (and overwrites) that vanity.
+// NOTE: no-loop prevents re-entry — promoting a vanity inside the service also sets j:url,
+// which would otherwise re-trigger this rule and incorrectly strip the mixin.
+// The Java-level session.isSystem() guard provides an additional safety net, but no-loop
+// is the authoritative Drools-level re-entrancy control for this rule.
 rule "Mark vanity as manual when editor changes its URL"
+    no-loop true
 when
     A property j:url has been set on a node
     - not in operation import
