@@ -115,7 +115,7 @@ Enabling the module on a site does **not** auto-generate vanities for existing p
 
 ### Permissions
 
-Admin panel requires the `siteAdminPermalinkGenerator` permission. Assign via Roles Manager.
+The admin panel and the `generatePermalinks` action endpoint both require the `siteAdminPermalinkGenerator` permission on the site. Assign via Roles Manager. Users also must be authenticated; unauthenticated requests are rejected.
 
 ### Logging
 
@@ -196,8 +196,22 @@ Published vanities are never deleted — kept as active redirects.
 
 ### `GeneratePermalinksAction` — action endpoint
 
+Requires authentication and the `siteAdminPermalinkGenerator` permission.
+
+The endpoint accepts two URL forms:
+
+**Site-specific** (used at runtime when settings node exists):
 ```
 POST /cms/render/default/en/sites/{siteKey}/settings/site-settings-base/permalinkGeneratorSettings/pagecontent/permalinkGeneratorSiteSettings.generatePermalinks.do
+```
+
+**Module template** (used in tests before settings node is rendered):
+```
+POST /cms/render/default/en/modules/permalink-generator/templates/site-settings-base/permalinkGeneratorSettings/pagecontent/permalinkGeneratorSiteSettings.generatePermalinks.do
+```
+
+Request format:
+```
 Content-Type: application/x-www-form-urlencoded
 X-Requested-With: XMLHttpRequest
 
@@ -221,6 +235,14 @@ Response (non-preview):
 ### SMART mode internals
 
 `hasManualActiveDefaultVanity(node, lang)` returns true when an active+default vanity exists with **no** `jmix:permalinkGenerated` mixin. When true and `forceRegen == false`, the node is skipped. On cascade (rename/move of parent), manual vanities on children receive a prefix-only update — the slug after the last `/` is preserved.
+
+### Authorization
+
+The `GeneratePermalinksAction` endpoint requires:
+- Authenticated user (via session cookie or JWT)
+- `siteAdminPermalinkGenerator` permission on the target site
+
+Both checks are enforced in the action's `activate()` method via `setRequiredPermission()` and `setRequireAuthenticatedUser(true)`.
 
 ### Building
 

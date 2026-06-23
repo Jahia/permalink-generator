@@ -57,8 +57,8 @@ describe('SiteSettings panel', () => {
 
         cy.contains('button', 'Save').click();
         cy.wait('@gqlMutation');
-        // After a successful save the component sets status to "✓ Save"
-        cy.contains('✓ Save').should('be.visible');
+        // After a successful save the component sets status to i18n.saveSuccess
+        cy.contains('✓ Settings saved').should('be.visible');
     });
 
     it('excluded paths textarea accepts input', () => {

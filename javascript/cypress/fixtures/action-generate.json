@@ -1,3 +1,20 @@
 {
-  "generated": 2
+  "results": [
+    {
+      "uuid": "uuid-page-1",
+      "path": "/sites/testsite/home/about",
+      "language": "en",
+      "action": "created",
+      "url": "/en/about-us",
+      "oldUrl": ""
+    },
+    {
+      "uuid": "uuid-page-2",
+      "path": "/sites/testsite/home/contact",
+      "language": "fr",
+      "action": "created",
+      "url": "/fr/contact",
+      "oldUrl": ""
+    }
+  ]
 }

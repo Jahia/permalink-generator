@@ -4,7 +4,12 @@ export function gql(contextPath, body) {
         headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
         credentials: 'include',
         body: JSON.stringify(body)
-    }).then(r => r.json());
+    }).then(r => {
+        if (!r.ok) {
+            return Promise.reject(Object.assign(new Error('HTTP ' + r.status), { status: r.status }));
+        }
+        return r.json();
+    });
 }
 
 // Use XHR so CsrfGuardJavascriptFilter's XMLHttpRequest patch auto-injects the token.

@@ -85,7 +85,11 @@ window.__PL_CONFIG__ = {
         reportColOldUrl: '<fmt:message key="permalinkgenerator.regen.report.col.oldUrl"/>',
         reportColNewUrl: '<fmt:message key="permalinkgenerator.regen.report.col.newUrl"/>',
         exclPlaceholder: '<fmt:message key="permalinkgenerator.excludedPaths.placeholder"/>',
-        saveError:       '<fmt:message key="permalinkgenerator.save.error"/>'
+        saveError:       '<fmt:message key="permalinkgenerator.save.error"/>',
+        generating:      '<fmt:message key="permalinkgenerator.generating"/>',
+        saveSuccess:     '<fmt:message key="permalinkgenerator.saveSuccess"/>',
+        genPartial:      '<fmt:message key="permalinkgenerator.audit.generate.partial"/>',
+        regenPartial:    '<fmt:message key="permalinkgenerator.regen.generate.partial"/>'
     }
 };
 window.__PL_CONFIG__.actionUrl = window.location.pathname.replace(/\.[^/]+\.html$/, '') + '.generatePermalinks.do';

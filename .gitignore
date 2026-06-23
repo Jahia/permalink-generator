@@ -20,3 +20,14 @@ node/
 node_modules/
 javascript/dist/
 /tests/.impeccable/
+javascript/.yarn/
+javascript/.yarnrc.yml
+javascript/yarn.lock
+javascript/.pnp.*
+*.js.map
+/META-INF/
+/name/
+/hibernate.properties
+/jahiaSizeOfEngine.filter
+/jahiahtmlheader.xsl
+/jahiapublickeystore

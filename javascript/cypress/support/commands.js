@@ -1,6 +1,6 @@
 /**
  * cy.interceptGraphql(alias, fixture)
- * Intercepts POST to **/graphql and replies with the given fixture file.
+ * Intercepts POST to the GraphQL endpoint and replies with the given fixture file.
  * Both parallel GQL calls in AuditPanel/RegenPanel will be matched independently.
  */
 Cypress.Commands.add('interceptGraphql', (alias, fixture) => {

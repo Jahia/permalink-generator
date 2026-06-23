@@ -1,61 +1,48 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { gql, postAction } from '../utils/api';
-
-const BATCH = 100;
-const CHUNK = 20;
-
-const GQL_QUERY = 'query($q:String!,$lim:Int!,$off:Int!){jcr{nodesByQuery(query:$q,queryLanguage:SQL2,limit:$lim,offset:$off){nodes{uuid path displayName isHomePage:property(name:"j:isHomePage"){value} vanityUrls{url language active default}}}}}';
-
-function hasActiveDefault(vanityUrls, lang) {
-    return (vanityUrls || []).some(v => v.language === lang && v.active && v['default']);
-}
-
-function isExcludedBySettings(nodePath, excludedPaths) {
-    return excludedPaths.some(ep => ep && nodePath.startsWith(ep));
-}
-
-function LegendItem({ cls, label }) {
-    return (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-            <span className={'pl-pill ' + cls} style={{ cursor: 'default', pointerEvents: 'none' }} aria-hidden="true">XX</span>
-            <span style={{ color: '#555' }}>{label}</span>
-        </span>
-    );
-}
+import {
+    BATCH, CHUNK, GQL_QUERY,
+    hasActiveDefault, isExcludedBySettings,
+    selectCell, deselectCell, totalSelected
+} from '../utils/permalink';
+import { LegendItem, ProgressBar, PillCell, LoadMore } from './shared';
 
 export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths, actionUrl, i18n }) {
     const [showLegend, setShowLegend] = useState(false);
     const [scanPath, setScanPath] = useState(sitePath);
     const [scanning, setScanning] = useState(false);
-    const [scanStatus, setScanStatus] = useState({ msg: '', color: '#666' });
+    const [scanStatus, setScanStatus] = useState({ msg: '', color: '#4d4d4d' });
     const [showResults, setShowResults] = useState(false);
     const [rows, setRows] = useState([]);
     const [selections, setSelections] = useState({});
-    const [genStatus, setGenStatus] = useState({ msg: '', color: '#666' });
+    const [genStatus, setGenStatus] = useState({ msg: '', color: '#4d4d4d' });
     const [generating, setGenerating] = useState(false);
     const [progress, setProgress] = useState(0);
     const [showProgress, setShowProgress] = useState(false);
     const [hasMore, setHasMore] = useState(false);
     const [loadMoreStatus, setLoadMoreStatus] = useState('');
 
-    const offsetRef = useRef(0);
+    // Independent per-query offsets so pagination cannot drift when one query
+    // exhausts before the other (each advances only when it returned a full BATCH).
+    const offsetPageRef = useRef(0);
+    const offsetMixinRef = useRef(0);
     const totalScannedRef = useRef(0);
     const rowsRef = useRef([]);
-
-    function totalSelected(sels) {
-        return Object.values(sels).reduce((n, s) => n + s.size, 0);
-    }
+    // In-flight guard (replaces relying on the `scanning` state in deps, which
+    // produced a stale closure / re-created callback on every toggle).
+    const inFlightRef = useRef(false);
 
     const doScan = useCallback(async (reset) => {
-        if (scanning) return;
+        if (inFlightRef.current) return;
         const path = scanPath.trim();
         if (!path.startsWith('/sites/')) {
-            setScanStatus({ msg: i18n.pathRequired, color: '#c0392b' });
+            setScanStatus({ msg: i18n.pathRequired, color: '#922b21' });
             return;
         }
 
         if (reset) {
-            offsetRef.current = 0;
+            offsetPageRef.current = 0;
+            offsetMixinRef.current = 0;
             totalScannedRef.current = 0;
             rowsRef.current = [];
             setRows([]);
@@ -65,36 +52,47 @@ export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths
             setLoadMoreStatus('');
         }
 
+        inFlightRef.current = true;
         setScanning(true);
-        setScanStatus({ msg: i18n.scanRunning, color: '#666' });
+        setScanStatus({ msg: i18n.scanRunning, color: '#4d4d4d' });
 
         const escapedPath = path.replace(/'/g, "''");
         const qPage  = `SELECT * FROM [jnt:page] AS n WHERE ISDESCENDANTNODE(n, '${escapedPath}')`;
         const qMixin = `SELECT * FROM [jmix:mainResource] AS n WHERE ISDESCENDANTNODE(n, '${escapedPath}')`;
-        const off = offsetRef.current;
+        const offPage = offsetPageRef.current;
+        const offMixin = offsetMixinRef.current;
 
         try {
             const [r1, r2] = await Promise.all([
-                gql(contextPath, { query: GQL_QUERY, variables: { q: qPage, lim: BATCH, off } }),
-                gql(contextPath, { query: GQL_QUERY, variables: { q: qMixin, lim: BATCH, off } })
+                gql(contextPath, { query: GQL_QUERY, variables: { q: qPage, lim: BATCH, off: offPage } }),
+                gql(contextPath, { query: GQL_QUERY, variables: { q: qMixin, lim: BATCH, off: offMixin } })
             ]);
 
             const seen = {};
             const nodes = [];
             const errors = [];
+            const nodesOf = data => {
+                try { return data.data.jcr.nodesByQuery.nodes || []; } catch (e) { console.warn(e); return []; }
+            };
             for (const data of [r1, r2]) {
                 if (data.errors) { errors.push(...data.errors.map(e => e.message)); continue; }
-                try { (data.data.jcr.nodesByQuery.nodes || []).forEach(n => { if (!seen[n.uuid]) { seen[n.uuid] = true; nodes.push(n); } }); } catch(e) {}
+                nodesOf(data).forEach(n => { if (!seen[n.uuid]) { seen[n.uuid] = true; nodes.push(n); } });
             }
 
             if (errors.length && nodes.length === 0) {
-                setScanStatus({ msg: i18n.errorGraphql.replace('{0}', errors.join('; ')), color: '#c0392b' });
+                setScanStatus({ msg: i18n.errorGraphql.replace('{0}', errors.join('; ')), color: '#922b21' });
                 return;
             }
 
-            const more = [r1, r2].some(data => { try { return (data.data.jcr.nodesByQuery.nodes || []).length === BATCH; } catch(e) { return false; } });
+            // Advance each offset independently; only paginate a query that
+            // returned a full BATCH (otherwise it is exhausted).
+            const pageFull = nodesOf(r1).length === BATCH;
+            const mixinFull = nodesOf(r2).length === BATCH;
+            if (pageFull) offsetPageRef.current += BATCH;
+            if (mixinFull) offsetMixinRef.current += BATCH;
+            const more = pageFull || mixinFull;
+
             totalScannedRef.current += nodes.length;
-            offsetRef.current += BATCH;
 
             const newRows = [];
             for (const n of nodes) {
@@ -119,41 +117,27 @@ export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths
 
             const total = totalScannedRef.current;
             const missing = rowsRef.current.length;
+            const scannedSoFar = Math.max(offsetPageRef.current, offsetMixinRef.current);
 
             if (more) {
-                setLoadMoreStatus(i18n.loadMoreSt.replace('{0}', offsetRef.current).replace('{1}', missing));
+                setLoadMoreStatus(i18n.loadMoreSt.replace('{0}', scannedSoFar).replace('{1}', missing));
             } else {
                 setLoadMoreStatus('');
             }
 
             if (missing === 0 && !more) {
-                setScanStatus({ msg: i18n.allGood.replace('{0}', total), color: '#27ae60' });
+                setScanStatus({ msg: i18n.allGood.replace('{0}', total), color: '#0a4d25' });
             } else {
-                setScanStatus({ msg: i18n.scanned.replace('{0}', total).replace('{1}', missing), color: missing > 0 ? '#333' : '#27ae60' });
+                setScanStatus({ msg: i18n.scanned.replace('{0}', total).replace('{1}', missing), color: missing > 0 ? '#333' : '#0a4d25' });
                 setShowResults(true);
             }
         } catch(e) {
-            setScanStatus({ msg: i18n.errorNetwork.replace('{0}', e.message || '?'), color: '#c0392b' });
+            setScanStatus({ msg: i18n.errorNetwork.replace('{0}', e.message || '?'), color: '#922b21' });
         } finally {
+            inFlightRef.current = false;
             setScanning(false);
         }
-    }, [scanning, scanPath, contextPath, langs, excludedPaths, i18n]);
-
-    function selectCell(sels, uuid, lang) {
-        const next = { ...sels };
-        if (!next[uuid]) next[uuid] = new Set();
-        else next[uuid] = new Set(next[uuid]);
-        next[uuid].add(lang);
-        return next;
-    }
-    function deselectCell(sels, uuid, lang) {
-        if (!sels[uuid]) return sels;
-        const next = { ...sels };
-        next[uuid] = new Set(next[uuid]);
-        next[uuid].delete(lang);
-        if (next[uuid].size === 0) delete next[uuid];
-        return next;
-    }
+    }, [scanPath, contextPath, langs, excludedPaths, i18n]);
 
     function toggleCell(uuid, lang) {
         setSelections(prev => {
@@ -216,9 +200,9 @@ export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths
 
         const total = totalSelected(selections);
         let done = 0;
-        let hadError = false;
+        let errorCount = 0;
         setGenerating(true);
-        setGenStatus({ msg: '', color: '#666' });
+        setGenStatus({ msg: '', color: '#4d4d4d' });
         setShowProgress(true);
         setProgress(0);
 
@@ -233,31 +217,45 @@ export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths
                     params.append('languages[]', lang);
 
                     try {
-                        await postAction(actionUrl, params);
-                        for (const uuid of chunk) {
-                            const row = rowsRef.current.find(r => r.uuid === uuid);
-                            if (row) row.generated.add(lang);
-                        }
+                        const data = await postAction(actionUrl, params);
+                        // Consume the real {results:[...]} response shape; count
+                        // server-confirmed results when present, else the chunk size.
+                        const results = (data && Array.isArray(data.results)) ? data.results : null;
+                        const confirmed = results ? results.length : chunk.length;
+                        // Build fresh row objects with a new Set rather than
+                        // mutating the ref'd rows in place.
+                        rowsRef.current = rowsRef.current.map(row => {
+                            if (!chunk.includes(row.uuid)) return row;
+                            const generated = new Set(row.generated);
+                            generated.add(lang);
+                            return { ...row, generated };
+                        });
                         setSelections(prev => {
                             let next = { ...prev };
                             chunk.forEach(uuid => { next = deselectCell(next, uuid, lang); });
                             return next;
                         });
-                        done += chunk.length;
-                        setProgress(Math.min(1, done / total));
+                        done += confirmed;
+                        setProgress(Math.min(1, total ? done / total : 1));
                         setRows([...rowsRef.current]);
                     } catch(e) {
-                        hadError = true;
-                        setGenStatus({ msg: i18n.genError.replace('{0}', e.status || '?').replace('{1}', lang), color: '#c0392b' });
+                        errorCount += chunk.length;
+                        setGenStatus({ msg: i18n.genError.replace('{0}', e.status || '?').replace('{1}', lang), color: '#922b21' });
                     }
                 }
             }
         } finally {
             setShowProgress(false);
-            if (done > 0) {
-                setGenStatus({ msg: i18n.genSuccess.replace('{0}', done), color: '#27ae60' });
-            } else if (!hadError) {
-                setGenStatus({ msg: i18n.genZero, color: '#e67e22' });
+            // Combined message so a later success does not silently overwrite an
+            // earlier failure.
+            if (errorCount > 0 && done > 0) {
+                setGenStatus({ msg: i18n.genPartial.replace('{0}', done).replace('{1}', errorCount), color: '#8a4500' });
+            } else if (errorCount > 0) {
+                setGenStatus({ msg: i18n.genError.replace('{0}', '?').replace('{1}', '—'), color: '#922b21' });
+            } else if (done > 0) {
+                setGenStatus({ msg: i18n.genSuccess.replace('{0}', done), color: '#0a4d25' });
+            } else {
+                setGenStatus({ msg: i18n.genZero, color: '#8a4500' });
             }
             setGenerating(false);
         }
@@ -265,12 +263,22 @@ export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths
 
     const selCount = totalSelected(selections);
 
-    const allMissing = rowsRef.current.reduce((acc, row) => {
+    const allMissing = rows.reduce((acc, row) => {
         if (row.isHomePage) return acc;
         row.missing.forEach(l => { if (!row.generated.has(l)) acc.push({ uuid: row.uuid, l }); });
         return acc;
     }, []);
     const allSelected = allMissing.length > 0 && allMissing.every(item => selections[item.uuid] && selections[item.uuid].has(item.l));
+
+    // Per-column "all selected" state, hoisted out of render's inline IIFE.
+    const colAllSelected = useMemo(() => {
+        const map = {};
+        langs.forEach(lang => {
+            const colMissing = rows.filter(r => r.missing.has(lang) && !r.generated.has(lang));
+            map[lang] = colMissing.length > 0 && colMissing.every(r => selections[r.uuid] && selections[r.uuid].has(lang));
+        });
+        return map;
+    }, [langs, rows, selections]);
 
     return (
         <div className="pl-audit">
@@ -287,7 +295,7 @@ export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths
             <p className="text-muted">{i18n.auditDesc}</p>
 
             <div id="plAuditLegend" className={'pl-legend-wrap' + (showLegend ? ' open' : '')}>
-                <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', padding: '0 0 16px', fontSize: 12 }}>
+                <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', padding: '0 0 16px', fontSize: '0.75rem' }}>
                     <LegendItem cls="pl-pill-miss" label={i18n.pillMissing} />
                     <LegendItem cls="pl-pill-sel"  label={i18n.pillSelected} />
                     <LegendItem cls="pl-pill-has"  label={i18n.pillExisting} />
@@ -306,7 +314,7 @@ export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths
                         className="input-xlarge"
                         value={scanPath}
                         onChange={e => setScanPath(e.target.value)}
-                        style={{ fontFamily: 'monospace', fontSize: 12 }}
+                        style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}
                     />
                     <button
                         className="btn"
@@ -316,14 +324,14 @@ export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths
                     >
                         <i className="icon-search" aria-hidden="true"></i> {i18n.auditScan}
                     </button>
-                    <span role="status" aria-live="polite" style={{ fontSize: 12, color: scanStatus.color }}>{scanStatus.msg}</span>
+                    <span role="status" aria-live="polite" style={{ fontSize: '0.75rem', color: scanStatus.color }}>{scanStatus.msg}</span>
                 </div>
             </div>
 
             {showResults && (
                 <div style={{ marginTop: 16 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
-                        <span aria-live="polite" style={{ fontSize: 13, fontWeight: 'bold' }}>
+                        <span role="status" aria-live="polite" style={{ fontSize: '0.8125rem', fontWeight: 'bold' }}>
                             {i18n.summary.replace('{0}', rows.length)}
                         </span>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -335,28 +343,19 @@ export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths
                             >
                                 <i className="icon-cog icon-white" aria-hidden="true"></i> {i18n.auditGenerate} ({selCount})
                             </button>
-                            <span role="status" aria-live="polite" style={{ fontSize: 12, color: genStatus.color }}>{genStatus.msg}</span>
+                            <span role="status" aria-live="polite" style={{ fontSize: '0.75rem', color: genStatus.color }}>{genStatus.msg}</span>
                         </div>
                     </div>
 
                     {showProgress && (
-                        <div
-                            className="pl-progress-wrap"
-                            role="progressbar"
-                            aria-valuenow={Math.round(progress * 100)}
-                            aria-valuemin={0}
-                            aria-valuemax={100}
-                            aria-label={i18n.scanRunning}
-                        >
-                            <div className="pl-progress-bar" style={{ transform: `scaleX(${progress})` }} aria-hidden="true"></div>
-                        </div>
+                        <ProgressBar progress={progress} label={i18n.generating} />
                     )}
 
                     <div style={{ overflowX: 'auto' }}>
                         <table className="pl-audit-table">
                             <thead>
                                 <tr>
-                                    <th style={{ width: 28 }}>
+                                    <th scope="col" style={{ width: 28 }}>
                                         <input
                                             type="checkbox"
                                             aria-label={i18n.auditSelectAll}
@@ -364,18 +363,15 @@ export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths
                                             onChange={e => toggleSelectAll(e.target.checked)}
                                         />
                                     </th>
-                                    <th>{i18n.auditColPath}</th>
+                                    <th scope="col">{i18n.auditColPath}</th>
                                     {langs.map(lang => (
-                                        <th key={lang} className="pl-lang-th" data-lang={lang}>
+                                        <th scope="col" key={lang} className="pl-lang-th" data-lang={lang}>
                                             {lang.toUpperCase()}<br/>
                                             <input
                                                 type="checkbox"
                                                 style={{ margin: '2px 0 0 0' }}
                                                 aria-label={i18n.colLangTitle.replace('{0}', lang.toUpperCase())}
-                                                checked={(() => {
-                                                    const colMissing = rows.filter(r => r.missing.has(lang) && !r.generated.has(lang));
-                                                    return colMissing.length > 0 && colMissing.every(r => selections[r.uuid] && selections[r.uuid].has(lang));
-                                                })()}
+                                                checked={!!colAllSelected[lang]}
                                                 onChange={e => { e.stopPropagation(); toggleColLang(lang, e.target.checked); }}
                                             />
                                         </th>
@@ -403,7 +399,7 @@ export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths
                                             </td>
                                             <td
                                                 title={row.path}
-                                                style={{ fontFamily: 'monospace', fontSize: 11, color: '#666', maxWidth: 340, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                                                style={{ fontFamily: 'monospace', fontSize: '0.6875rem', color: '#4d4d4d', maxWidth: 340, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                                             >
                                                 {row.path}
                                             </td>
@@ -424,20 +420,15 @@ export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths
                                                 if (row.hasNoTitle) { cls += ' pl-notitle'; pillLabel += ' — ' + i18n.pillNoTitle; }
                                                 const isPressed = !!(selections[row.uuid] && selections[row.uuid].has(lang));
                                                 return (
-                                                    <td key={lang} style={{ textAlign: 'center' }}>
-                                                        <span
-                                                            className={cls}
-                                                            title={pillLabel}
-                                                            role={clickable ? 'button' : undefined}
-                                                            tabIndex={clickable ? 0 : undefined}
-                                                            aria-pressed={clickable ? isPressed : undefined}
-                                                            aria-label={clickable ? `${lang.toUpperCase()} — ${pillLabel}` : undefined}
-                                                            onClick={clickable ? () => toggleCell(row.uuid, lang) : undefined}
-                                                            onKeyDown={clickable ? e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleCell(row.uuid, lang); } } : undefined}
-                                                        >
-                                                            {lang}
-                                                        </span>
-                                                    </td>
+                                                    <PillCell
+                                                        key={lang}
+                                                        cls={cls}
+                                                        lang={lang}
+                                                        pillLabel={pillLabel}
+                                                        clickable={clickable}
+                                                        pressed={isPressed}
+                                                        onToggle={() => toggleCell(row.uuid, lang)}
+                                                    />
                                                 );
                                             })}
                                         </tr>
@@ -448,16 +439,12 @@ export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths
                     </div>
 
                     {hasMore && (
-                        <div style={{ textAlign: 'center', marginTop: 12 }}>
-                            <button className="btn" onClick={() => doScan(false)} disabled={scanning} aria-busy={scanning}>
-                                {i18n.auditLoadMore}
-                            </button>
-                            {loadMoreStatus && (
-                                <span role="status" aria-live="polite" style={{ fontSize: 12, color: '#777', marginLeft: 8 }}>
-                                    {loadMoreStatus}
-                                </span>
-                            )}
-                        </div>
+                        <LoadMore
+                            scanning={scanning}
+                            label={i18n.auditLoadMore}
+                            status={loadMoreStatus}
+                            onClick={() => doScan(false)}
+                        />
                     )}
                 </div>
             )}
