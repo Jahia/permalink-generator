@@ -58,9 +58,9 @@ const CUSTOM_CSS = `
 .pl-regen h3 { margin-top: 0; font-size: 1.125rem; color: #4d4d4d; }
 .pl-help-btn {
     display: inline-flex; align-items: center; justify-content: center;
-    width: 44px; height: 44px; border-radius: 50%;
+    width: 20px; height: 20px; border-radius: 50%;
     border: 1px solid #767676; background: transparent;
-    color: #4d4d4d; font-size: 0.875rem; font-weight: bold;
+    color: #4d4d4d; font-size: 0.75rem; font-weight: bold;
     cursor: pointer; margin-left: 8px; vertical-align: middle; line-height: 1;
     transition: background 150ms ease-out, color 150ms ease-out, border-color 150ms ease-out;
 }
