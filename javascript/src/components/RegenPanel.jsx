@@ -7,7 +7,7 @@ import {
 } from '../utils/permalink';
 import { LegendItem, ProgressBar, PillCell, LoadMore } from './shared';
 
-function ConfirmModal({ show, i18n, onCancel, onConfirm }) {
+function ConfirmModal({ show, i18n, onCancel, onConfirm, selCount }) {
     const modalRef = useRef(null);
     const triggerRef = useRef(null);
 
@@ -63,15 +63,16 @@ function ConfirmModal({ show, i18n, onCancel, onConfirm }) {
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="plConfirmTitle"
+                aria-describedby="plConfirmBody"
             >
                 <div className="modal-header">
-                    <button type="button" className="close" aria-label={i18n.cancel} onClick={onCancel}>
+                    <button type="button" className="close" aria-label={i18n.closeDialog} onClick={onCancel}>
                         <span aria-hidden="true">&times;</span>
                     </button>
                     <h3 id="plConfirmTitle">{i18n.confirmTitle}</h3>
                 </div>
                 <div className="modal-body">
-                    <p>{i18n.confirmBody}</p>
+                    <p id="plConfirmBody">{i18n.confirmBody.replace('{0}', selCount)}</p>
                 </div>
                 <div className="modal-footer">
                     <button className="btn" onClick={onCancel}>{i18n.cancel}</button>
@@ -108,6 +109,8 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
     const totalScannedRef = useRef(0);
     const rowsRef = useRef([]);
     const selectionsRef = useRef({});
+    // Ref for the report heading to scroll into view after generation (issue 30).
+    const reportHeadingRef = useRef(null);
     // In-flight guard (replaces the stale `scanning`-in-deps guard).
     const inFlightRef = useRef(false);
     // Read bypassExcluded through a ref so the memoized doScan always sees the
@@ -160,7 +163,8 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
             }
 
             if (errors.length && nodes.length === 0) {
-                setScanStatus({ msg: i18n.errorGraphql.replace('{0}', errors.join('; ')), color: '#922b21' });
+                console.error('GraphQL scan errors:', errors);
+                setScanStatus({ msg: 'Error: ' + i18n.errorGraphql.replace('{0}', errors.length), color: '#922b21' });
                 return;
             }
 
@@ -256,8 +260,13 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
                 setLoadMoreStatus('');
             }
 
-            setScanStatus({ msg: i18n.regenScanned.replace('{0}', totalScannedRef.current).replace('{1}', rowsRef.current.length), color: '#333' });
-            setShowResults(true);
+            if (rowsRef.current.length === 0 && !more) {
+                // All pages are up to date — no results to show (issue 7).
+                setScanStatus({ msg: i18n.regenAllGood.replace('{0}', totalScannedRef.current), color: '#0a4d25' });
+            } else {
+                setScanStatus({ msg: i18n.regenScanned.replace('{0}', totalScannedRef.current).replace('{1}', rowsRef.current.length), color: '#333' });
+                setShowResults(true);
+            }
         } catch(e) {
             setScanStatus({ msg: i18n.errorNetwork.replace('{0}', e.message || '?'), color: '#922b21' });
         } finally {
@@ -266,15 +275,25 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
         }
     }, [sitePath, contextPath, langs, excludedPaths, actionUrl, i18n]);
 
-    function toggleCell(uuid, lang) {
+    // Helper that updates both the React state and the ref atomically so
+    // selectionsRef stays in sync with user changes between Load More batches (issue 2).
+    function applySelections(updater) {
         setSelections(prev => {
+            const next = updater(prev);
+            selectionsRef.current = next;
+            return next;
+        });
+    }
+
+    function toggleCell(uuid, lang) {
+        applySelections(prev => {
             if (prev[uuid] && prev[uuid].has(lang)) return deselectCell(prev, uuid, lang);
             return selectCell(prev, uuid, lang);
         });
     }
 
     function toggleRow(uuid, checked) {
-        setSelections(prev => {
+        applySelections(prev => {
             let next = { ...prev };
             if (checked) {
                 const row = rowsRef.current.find(r => r.uuid === uuid);
@@ -287,7 +306,7 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
     }
 
     function toggleSelectAll(checked) {
-        setSelections(prev => {
+        applySelections(prev => {
             let next = { ...prev };
             if (checked) {
                 rowsRef.current.forEach(row => {
@@ -302,7 +321,7 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
     }
 
     function toggleColLang(lang, checked) {
-        setSelections(prev => {
+        applySelections(prev => {
             let next = { ...prev };
             rowsRef.current.forEach(row => {
                 if (row.isHomePage || row.generated.has(lang)) return;
@@ -345,6 +364,7 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
                     chunk.forEach(uid => params.append('nodeIds[]', uid));
                     params.append('languages[]', lang);
                     params.append('force', 'true');
+                    params.append('bypassExcluded', bypassExcludedRef.current ? 'true' : 'false');
 
                     try {
                         const data = await postAction(actionUrl, params);
@@ -368,24 +388,31 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
                         setProgress(Math.min(1, done / total));
                         setRows([...rowsRef.current]);
                     } catch(e) {
+                        console.error('Regen chunk error:', e);
                         errorCount += chunk.length;
-                        setGenStatus({ msg: i18n.regenError.replace('{0}', e.status || '?').replace('{1}', lang), color: '#922b21' });
+                        setGenStatus({ msg: 'Error: ' + i18n.regenError.replace('{0}', e.status || '?').replace('{1}', lang), color: '#922b21' });
                     }
                 }
             }
         } finally {
-            setShowProgress(false);
-            setReportEntries([...entries]);
+            // Set genStatus before hiding progress bar to avoid a render cycle
+            // where neither the bar nor the message is visible (issue 12).
             if (errorCount > 0 && done > 0) {
                 setGenStatus({ msg: i18n.regenPartial.replace('{0}', done).replace('{1}', errorCount), color: '#8a4500' });
             } else if (errorCount > 0) {
-                setGenStatus({ msg: i18n.regenError.replace('{0}', '?').replace('{1}', '—'), color: '#922b21' });
+                setGenStatus({ msg: i18n.regenAllFailed, color: '#922b21' });
             } else if (done > 0) {
-                setGenStatus({ msg: i18n.regenSuccess.replace('{0}', done), color: '#0a4d25' });
+                setGenStatus({ msg: '✓ ' + i18n.regenSuccess.replace('{0}', done), color: '#0a4d25' });
             } else {
                 setGenStatus({ msg: i18n.regenZero, color: '#8a4500' });
             }
+            setShowProgress(false);
+            setReportEntries([...entries]);
             setGenerating(false);
+            // Scroll the report into view if entries were produced (issue 30).
+            if (entries.length > 0) {
+                setTimeout(() => reportHeadingRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+            }
         }
     }
 
@@ -413,10 +440,10 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
     const actionColor = { created: '#0a4d25', promoted: '#1d5278', already_correct: '#4d4d4d' };
 
     return (
-        <div className="pl-regen">
-            <ConfirmModal show={showConfirm} i18n={i18n} onCancel={() => setShowConfirm(false)} onConfirm={doGenerate} />
+        <div className="pl-regen" role="region" aria-labelledby="plRegenHeading">
+            <ConfirmModal show={showConfirm} i18n={i18n} onCancel={() => setShowConfirm(false)} onConfirm={doGenerate} selCount={selCount} />
 
-            <h3 style={{ display: 'flex', alignItems: 'center' }}>
+            <h3 id="plRegenHeading" style={{ display: 'flex', alignItems: 'center' }}>
                 {i18n.regenTitle}
                 <button
                     className="pl-help-btn"
@@ -428,7 +455,7 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
             </h3>
             <p className="text-muted">{i18n.regenDesc}</p>
 
-            <div id="plRegenLegend" className={'pl-legend-wrap' + (showLegend ? ' open' : '')}>
+            <div id="plRegenLegend" className={'pl-legend-wrap' + (showLegend ? ' open' : '')} aria-hidden={!showLegend}>
                 <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', padding: '0 0 16px', fontSize: '0.75rem' }}>
                     <LegendItem cls="pl-pill-miss"   label={i18n.pillMissing} />
                     <LegendItem cls="pl-pill-stale"  label={i18n.pillStale} />
@@ -475,7 +502,7 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
                                 disabled={selCount === 0 || generating}
                                 aria-busy={generating}
                             >
-                                <i className="icon-cog icon-white" aria-hidden="true"></i> {i18n.regenGenerate} ({selCount})
+                                <i className="icon-cog icon-white" aria-hidden="true"></i> {i18n.regenGenerate}{selCount > 0 ? ' (' + selCount + ')' : ''}
                             </button>
                             <span role="status" aria-live="polite" style={{ fontSize: '0.75rem', color: genStatus.color }}>{genStatus.msg}</span>
                         </div>
@@ -486,18 +513,19 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
                     )}
 
                     <div style={{ overflowX: 'auto' }}>
-                        <table className="pl-audit-table">
+                        <table className="pl-audit-table" aria-describedby={showLegend ? 'plRegenLegend' : undefined}>
+                            <caption className="sr-only">{i18n.regenTitle}</caption>
                             <thead>
                                 <tr>
                                     <th scope="col" style={{ width: 28 }}>
                                         <input
                                             type="checkbox"
-                                            aria-label={i18n.auditSelectAll}
+                                            aria-label={i18n.regenSelectAll}
                                             checked={allSelected}
                                             onChange={e => toggleSelectAll(e.target.checked)}
                                         />
                                     </th>
-                                    <th scope="col">{i18n.auditColPath}</th>
+                                    <th scope="col">{i18n.regenColPath}</th>
                                     {langs.map(lang => (
                                         <th scope="col" key={lang} className="pl-lang-th" data-lang={lang}>
                                             {lang.toUpperCase()}<br/>
@@ -521,6 +549,7 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
                                         <tr
                                             key={row.uuid}
                                             className={'pl-audit-row' + (row.isHomePage ? ' pl-row-ignored' : '') + (allDone ? ' pl-row-done' : '')}
+                                            aria-disabled={row.isHomePage ? 'true' : undefined}
                                         >
                                             <td>
                                                 <input
@@ -581,7 +610,7 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
                     {hasMore && (
                         <LoadMore
                             scanning={scanning}
-                            label={i18n.auditLoadMore}
+                            label={i18n.regenLoadMore}
                             status={loadMoreStatus}
                             onClick={() => doScan(false)}
                         />
@@ -589,9 +618,9 @@ export default function RegenPanel({ contextPath, sitePath, langs, excludedPaths
 
                     {reportEntries.length > 0 && (
                         <div style={{ marginTop: 20 }}>
-                            <h4 style={{ margin: '0 0 8px 0', fontSize: '0.875rem' }}>{i18n.reportTitle}</h4>
+                            <h4 ref={reportHeadingRef} id="plReportTitle" tabIndex={-1} style={{ margin: '0 0 8px 0', fontSize: '0.875rem' }}>{i18n.reportTitle}</h4>
                             <div style={{ overflowX: 'auto' }}>
-                                <table className="pl-audit-table" style={{ fontSize: '0.6875rem' }}>
+                                <table className="pl-audit-table" style={{ fontSize: '0.6875rem' }} aria-labelledby="plReportTitle">
                                     <thead>
                                         <tr>
                                             <th scope="col" style={{ width: 44 }}>{i18n.reportColLang}</th>
