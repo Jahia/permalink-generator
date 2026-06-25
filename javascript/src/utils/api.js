@@ -1,3 +1,9 @@
+/**
+ * Execute a GraphQL request against the Jahia GraphQL endpoint.
+ * @param {string} contextPath - Jahia context path (e.g. '' or '/cms').
+ * @param {{ query: string, variables?: object }} body - GraphQL request body.
+ * @returns {Promise<object>} Parsed JSON response (may contain a top-level `errors` array).
+ */
 export function gql(contextPath, body) {
     return fetch(contextPath + '/modules/graphql', {
         method: 'POST',
@@ -12,7 +18,14 @@ export function gql(contextPath, body) {
     });
 }
 
-// Use XHR so CsrfGuardJavascriptFilter's XMLHttpRequest patch auto-injects the token.
+/**
+ * POST form-encoded parameters to a Jahia action URL via XHR.
+ * XHR is used (rather than fetch) so CsrfGuardJavascriptFilter's XMLHttpRequest
+ * patch can auto-inject the CSRF token.
+ * @param {string} url - Target action URL.
+ * @param {URLSearchParams} params - Form parameters to send.
+ * @returns {Promise<object>} Parsed JSON response from the action.
+ */
 export function postAction(url, params) {
     return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();

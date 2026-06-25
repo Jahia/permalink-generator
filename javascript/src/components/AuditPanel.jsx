@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { gql, postAction } from '../utils/api';
 import {
     BATCH, CHUNK, GQL_QUERY,
@@ -31,12 +31,14 @@ export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths
     // In-flight guard (replaces relying on the `scanning` state in deps, which
     // produced a stale closure / re-created callback on every toggle).
     const inFlightRef = useRef(false);
+    // Ref to the results heading for focus management after scan (SC 2.4.3).
+    const resultsHeadingRef = useRef(null);
 
     const doScan = useCallback(async (reset) => {
         if (inFlightRef.current) return;
         const path = scanPath.trim();
         if (!path.startsWith('/sites/')) {
-            setScanStatus({ msg: i18n.pathRequired, color: '#922b21' });
+            setScanStatus({ msg: 'Error: ' + i18n.pathRequired, color: '#922b21' });
             return;
         }
 
@@ -80,7 +82,8 @@ export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths
             }
 
             if (errors.length && nodes.length === 0) {
-                setScanStatus({ msg: i18n.errorGraphql.replace('{0}', errors.join('; ')), color: '#922b21' });
+                console.error('GraphQL scan errors:', errors);
+                setScanStatus({ msg: 'Error: ' + i18n.errorGraphql.replace('{0}', errors.length), color: '#922b21' });
                 return;
             }
 
@@ -245,21 +248,28 @@ export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths
                 }
             }
         } finally {
-            setShowProgress(false);
-            // Combined message so a later success does not silently overwrite an
-            // earlier failure.
+            // Set genStatus before hiding progress bar to avoid a render cycle
+            // where neither the bar nor the message is visible (issue 12).
             if (errorCount > 0 && done > 0) {
                 setGenStatus({ msg: i18n.genPartial.replace('{0}', done).replace('{1}', errorCount), color: '#8a4500' });
             } else if (errorCount > 0) {
-                setGenStatus({ msg: i18n.genError.replace('{0}', '?').replace('{1}', '—'), color: '#922b21' });
+                setGenStatus({ msg: i18n.genAllFailed, color: '#922b21' });
             } else if (done > 0) {
-                setGenStatus({ msg: i18n.genSuccess.replace('{0}', done), color: '#0a4d25' });
+                setGenStatus({ msg: '✓ ' + i18n.genSuccess.replace('{0}', done), color: '#0a4d25' });
             } else {
                 setGenStatus({ msg: i18n.genZero, color: '#8a4500' });
             }
+            setShowProgress(false);
             setGenerating(false);
         }
     }
+
+    // Move focus to the results heading when results first appear (SC 2.4.3).
+    useEffect(() => {
+        if (showResults && resultsHeadingRef.current) {
+            resultsHeadingRef.current.focus();
+        }
+    }, [showResults]);
 
     const selCount = totalSelected(selections);
 
@@ -281,8 +291,8 @@ export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths
     }, [langs, rows, selections]);
 
     return (
-        <div className="pl-audit">
-            <h3 style={{ display: 'flex', alignItems: 'center' }}>
+        <div className="pl-audit" role="region" aria-labelledby="plAuditHeading">
+            <h3 id="plAuditHeading" style={{ display: 'flex', alignItems: 'center' }}>
                 {i18n.auditTitle}
                 <button
                     className="pl-help-btn"
@@ -294,7 +304,7 @@ export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths
             </h3>
             <p className="text-muted">{i18n.auditDesc}</p>
 
-            <div id="plAuditLegend" className={'pl-legend-wrap' + (showLegend ? ' open' : '')}>
+            <div id="plAuditLegend" className={'pl-legend-wrap' + (showLegend ? ' open' : '')} aria-hidden={!showLegend}>
                 <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', padding: '0 0 16px', fontSize: '0.75rem' }}>
                     <LegendItem cls="pl-pill-miss" label={i18n.pillMissing} />
                     <LegendItem cls="pl-pill-sel"  label={i18n.pillSelected} />
@@ -313,7 +323,11 @@ export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths
                         id="plAuditPath"
                         className="input-xlarge"
                         value={scanPath}
-                        onChange={e => setScanPath(e.target.value)}
+                        onChange={e => {
+                            setScanPath(e.target.value);
+                            // Clear error state when the user edits the path (issue 8).
+                            if (scanStatus.color === '#922b21') setScanStatus({ msg: '', color: '#4d4d4d' });
+                        }}
                         style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}
                     />
                     <button
@@ -331,7 +345,14 @@ export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths
             {showResults && (
                 <div style={{ marginTop: 16 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
-                        <span role="status" aria-live="polite" style={{ fontSize: '0.8125rem', fontWeight: 'bold' }}>
+                        {/* Visually hidden heading receives focus after scan for SC 2.4.3 */}
+                        <span
+                            ref={resultsHeadingRef}
+                            tabIndex={-1}
+                            role="status"
+                            aria-live="polite"
+                            style={{ fontSize: '0.8125rem', fontWeight: 'bold' }}
+                        >
                             {i18n.summary.replace('{0}', rows.length)}
                         </span>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -341,7 +362,7 @@ export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths
                                 disabled={selCount === 0 || generating}
                                 aria-busy={generating}
                             >
-                                <i className="icon-cog icon-white" aria-hidden="true"></i> {i18n.auditGenerate} ({selCount})
+                                <i className="icon-cog icon-white" aria-hidden="true"></i> {i18n.auditGenerate}{selCount > 0 ? ' (' + selCount + ')' : ''}
                             </button>
                             <span role="status" aria-live="polite" style={{ fontSize: '0.75rem', color: genStatus.color }}>{genStatus.msg}</span>
                         </div>
@@ -352,7 +373,8 @@ export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths
                     )}
 
                     <div style={{ overflowX: 'auto' }}>
-                        <table className="pl-audit-table">
+                        <table className="pl-audit-table" aria-describedby={showLegend ? 'plAuditLegend' : undefined}>
+                            <caption className="sr-only">{i18n.auditTitle}</caption>
                             <thead>
                                 <tr>
                                     <th scope="col" style={{ width: 28 }}>
@@ -387,6 +409,7 @@ export default function AuditPanel({ contextPath, sitePath, langs, excludedPaths
                                         <tr
                                             key={row.uuid}
                                             className={'pl-audit-row' + (row.isHomePage ? ' pl-row-ignored' : '') + (allDone ? ' pl-row-done' : '')}
+                                            aria-disabled={row.isHomePage ? 'true' : undefined}
                                         >
                                             <td>
                                                 <input

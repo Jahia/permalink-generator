@@ -23,17 +23,27 @@ export default function SiteSettings({ contextPath, sitePath, currentMode, exclu
         gql(contextPath, { query: GQL_SAVE, variables: { path: sitePath, mode, paths: pathArr } })
             .then(d => {
                 if (d.errors) {
-                    setStatus({ ok: false, msg: d.errors[0].message });
+                    console.error('GraphQL save error:', d.errors);
+                    setStatus({ ok: false, msg: i18n.saveError });
                 } else {
                     setStatus({ ok: true, msg: i18n.saveSuccess });
                 }
             })
-            .catch(e => setStatus({ ok: false, msg: e.message || i18n.saveError }))
+            .catch(e => {
+                console.error('Save request failed:', e);
+                setStatus({ ok: false, msg: i18n.saveError });
+            })
             .finally(() => setSaving(false));
     }
 
     function handleCancel() {
-        window.location.reload();
+        const originalPaths = (excludedPaths || []).join('\n');
+        const isDirty = mode !== (currentMode || 'SMART') || paths !== originalPaths;
+        if (isDirty && !window.confirm('Discard unsaved changes?')) return;
+        // Reset state to props rather than reloading the page.
+        setMode(currentMode || 'SMART');
+        setPaths(originalPaths);
+        setStatus(null);
     }
 
     return (
