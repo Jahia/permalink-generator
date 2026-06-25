@@ -174,8 +174,8 @@ public class PermalinkGeneratorService {
         try {
             JCRSiteNode site = (JCRSiteNode) session.getNode(SITES_PREFIX + siteKey);
             return site.getInstalledModules().contains(MODULE_NAME);
-        } catch (RepositoryException ignored) {
-            // Node inaccessible — skip safely
+        } catch (RepositoryException | ClassCastException ignored) {
+            // Node inaccessible or not a site node — skip safely
             return false;
         }
     }
@@ -619,7 +619,7 @@ public class PermalinkGeneratorService {
             List<VanityUrl> conflict = vanityUrlManager.findExistingVanityUrls(url, siteKey, session);
             if (conflict == null || conflict.isEmpty()) return url;
             // Idempotent: conflict on THIS node — URL is already correct
-            if (conflictIsOnSameNode(conflict, node, session)) return url;
+            if (conflictIsOnSameNode(conflict, node)) return url;
             url = baseUrl + "-" + (attempt + 1);
         }
         logger.warn("No unique URL found for {} after {} attempts, skipping", node.getPath(), MAX_URL_ATTEMPTS);
@@ -631,7 +631,7 @@ public class PermalinkGeneratorService {
      * VanityUrl.getIdentifier() returns the content-node UUID directly — no parent navigation needed.
      * An entry with a null identifier is treated as belonging to a different node (conservative).
      */
-    private boolean conflictIsOnSameNode(List<VanityUrl> conflict, JCRNodeWrapper node, JCRSessionWrapper session) throws RepositoryException {
+    private boolean conflictIsOnSameNode(List<VanityUrl> conflict, JCRNodeWrapper node) throws RepositoryException {
         boolean allSame = true;
         for (VanityUrl v : conflict) {
             if (v.getIdentifier() == null) {
