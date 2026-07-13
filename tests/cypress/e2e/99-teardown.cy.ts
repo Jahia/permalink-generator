@@ -1,4 +1,4 @@
-import {deleteTestSite, deleteAuditSite} from '../support/permalinkgen'
+import {deleteTestSite, deleteAuditSite, deleteXSite} from '../support/permalinkgen'
 
 describe('Teardown', () => {
     before(() => {
@@ -11,5 +11,9 @@ describe('Teardown', () => {
 
     it('deletes audit test site plgenaudit', () => {
         deleteAuditSite()
+    })
+
+    it('deletes cross-site authz test site plgenxsite', () => {
+        deleteXSite()
     })
 })

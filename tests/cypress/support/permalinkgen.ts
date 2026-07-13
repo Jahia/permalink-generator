@@ -2,6 +2,11 @@ import {createSite as jahiaCreateSite, deleteSite as jahiaDeleteSite, enableModu
 
 export const SITE_KEY = 'plgentest'
 export const SITE_KEY_AUDIT = 'plgenaudit'  // used for scenario 4 (pages created before module enabled)
+export const SITE_KEY_XSITE = 'plgenxsite'  // second site B for the cross-site authz test (G1/S1)
+
+// Site-A-scoped administrator (NOT root) used by the cross-site authorization escalation test.
+export const SITE_A_ADMIN = 'plgenSiteaAdmin'
+export const SITE_A_ADMIN_PW = 'Permalink123!'
 
 // Admin settings URL for a site
 export const adminUrl = (siteKey: string = SITE_KEY) =>
@@ -29,8 +34,73 @@ export const createAuditSite = () => {
     // Do NOT enable permalink-generator yet — pages are created first in the test
 }
 
+// Create the second site B (module enabled) that holds MANUAL editorial vanities a site-A admin
+// must NOT be able to overwrite. Pages/vanities are seeded by the calling spec.
+export const createXSite = () => {
+    jahiaCreateSite(SITE_KEY_XSITE, {
+        templateSet: 'empty-templates',
+        serverName: 'localhost',
+        locale: 'en',
+        languages: 'en'
+    })
+    enableModule('permalink-generator', SITE_KEY_XSITE)
+}
+
 export const deleteTestSite = () => { jahiaDeleteSite(SITE_KEY) }
 export const deleteAuditSite = () => { jahiaDeleteSite(SITE_KEY_AUDIT) }
+export const deleteXSite = () => { jahiaDeleteSite(SITE_KEY_XSITE) }
+
+// Grant the site-administrator role (carrying siteAdminPermalinkGenerator) to a user SCOPED to a
+// single site only — the one missing provisioning piece for the cross-site authz test (G1/S1).
+export const grantSitePermalinkAdmin = (user: string, siteKey: string) => {
+    cy.executeGroovy('groovy/permalinkgen/grantSitePermalinkAdmin.groovy', {
+        USER: user,
+        SITE_KEY: siteKey
+    })
+}
+
+// Set j:permalinkGeneratorMode (SMART|FORCE) on a site node (real FORCE-mode e2e, G20/S12).
+export const setSiteMode = (siteKey: string, mode: 'SMART' | 'FORCE') => {
+    cy.executeGroovy('groovy/permalinkgen/setSiteMode.groovy', {
+        SITE_KEY: siteKey,
+        MODE: mode
+    })
+}
+
+// Real render-servlet URL of the generatePermalinks.do action for a site (matches the URL the admin
+// panel posts to: window.location.pathname without the trailing '.<template>.html' + '.generatePermalinks.do').
+export const actionUrl = (siteKey: string = SITE_KEY, lang = 'en') =>
+    `/cms/editframe/default/${lang}/sites/${siteKey}.generatePermalinks.do`
+
+// Resolve a node UUID by path.
+export const getNodeUuid = (path: string): Cypress.Chainable<string> =>
+    cy.apollo({queryFile: 'graphql/jcr/query/getNodeUuid.graphql', variables: {path}})
+        .then((resp: any) => resp?.data?.jcr?.nodeByPath?.uuid as string)
+
+// POST the REAL generatePermalinks.do action through Jahia's action dispatcher + security filter.
+// Does NOT use the Groovy shortcut — this traverses authn/authz for real.
+export const postGeneratePermalinksAction = (
+    url: string,
+    nodeIds: string[],
+    languages: string[],
+    opts: {force?: boolean; preview?: boolean; bypassExcluded?: boolean} = {}
+): Cypress.Chainable<Cypress.Response<any>> => {
+    const form: Record<string, string | string[]> = {
+        'nodeIds[]': nodeIds,
+        'languages[]': languages
+    }
+    if (opts.force) form.force = 'true'
+    if (opts.preview) form.preview = 'true'
+    if (opts.bypassExcluded) form.bypassExcluded = 'true'
+    return cy.request({
+        method: 'POST',
+        url,
+        form: true,
+        headers: {'X-Requested-With': 'XMLHttpRequest'},
+        body: form,
+        failOnStatusCode: false
+    })
+}
 
 // Create a jnt:page with multilingual titles
 export const createPage = (parentPath: string, name: string, titleEn: string, titleFr: string) => {
