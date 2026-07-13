@@ -79,6 +79,15 @@
             <version>4.11.0</version>
             <scope>test</scope>
         </dependency>
+        <!-- mockito-inline: enables static mocking (Mockito.mockStatic) and construction mocking
+             (Mockito.mockConstruction) required to unit-test the service's static Jahia collaborators
+             (JCRSessionFactory, JCRContentUtils, JCRTagUtils) and RenderContext instantiation. -->
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-inline</artifactId>
+            <version>4.11.0</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.mockito</groupId>
             <artifactId>mockito-junit-jupiter</artifactId>
