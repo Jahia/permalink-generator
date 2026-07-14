@@ -4,6 +4,7 @@ import {
     SITE_A_ADMIN,
     SITE_A_ADMIN_PW,
     getNodeUuid,
+    getVanityUrls,
     actionUrl,
     postGeneratePermalinksAction
 } from '../support/permalinkgen'
@@ -30,8 +31,13 @@ describe('Scenario 8 — generatePermalinks.do authn/authz (G3/S3)', () => {
     })
 
     it('anonymous caller is rejected (no 200/results)', () => {
-        cy.logout()
+        // Resolve the target node as root first, then drop the session so the POST is genuinely anonymous.
+        // cy.logout() alone does not clear the cy.request cookie jar reliably, so we also clearCookies();
+        // otherwise the "anonymous" POST silently reuses the previous session and the action runs 200.
+        cy.login()
         getNodeUuid(PAGE_A).then((uuid: string) => {
+            cy.logout()
+            cy.clearCookies()
             postGeneratePermalinksAction(actionUrl(SITE_KEY, 'en'), [uuid], ['en'])
                 .then((resp: Cypress.Response<any>) => {
                     expect(resp.status, 'anonymous must not get a 200 result').to.not.eq(200)
@@ -46,21 +52,38 @@ describe('Scenario 8 — generatePermalinks.do authn/authz (G3/S3)', () => {
             cy.login(NOBODY, NOBODY_PW)
             postGeneratePermalinksAction(actionUrl(SITE_KEY, 'en'), [uuid], ['en'])
                 .then((resp: Cypress.Response<any>) => {
-                    expect(resp.status).to.be.oneOf([401, 403])
+                    // Jahia's Render/security filter denies a resource the caller lacks permission on by
+                    // returning 404 ("resource not available", to avoid leaking existence) rather than a
+                    // bare 403. Any of these means the unprivileged caller was refused (NOT a 200 result).
+                    // The positive control below (site-A admin, same URL → 200) proves the route itself is
+                    // reachable, so 404 here is a genuine authorization denial, not a routing miss.
+                    expect(resp.status, 'unprivileged caller must be denied').to.be.oneOf([401, 403, 404])
                 })
         })
     })
 
-    it('site-A admin submitting site-A nodeIds succeeds with a results[] body (200)', () => {
+    it('site-A admin submitting site-A nodeIds is authorized (200) and generates the vanity', () => {
         cy.login()
         getNodeUuid(PAGE_A).then((uuid: string) => {
             cy.logout()
             cy.login(SITE_A_ADMIN, SITE_A_ADMIN_PW)
             postGeneratePermalinksAction(actionUrl(SITE_KEY, 'en'), [uuid], ['en'])
                 .then((resp: Cypress.Response<any>) => {
-                    expect(resp.status).to.eq(200)
-                    expect(resp.body).to.have.property('results')
+                    // Authorized: the same URL that returns 404 for the anonymous and unprivileged callers
+                    // above returns 200 here — the permission check passed and the action executed. (The
+                    // JSON results[] body is only readable via a real browser XHR, not raw cy.request — see
+                    // actionUrl note — so success is asserted by the 200 + the JCR side effect below.)
+                    expect(resp.status, 'authorized site-A admin is accepted').to.eq(200)
                 })
+            // Side-effect proof the action really ran: page-about carries an active+default EN vanity.
+            cy.logout()
+            cy.login()
+            getVanityUrls(PAGE_A).then((vresp: any) => {
+                const v = (vresp?.data?.jcr?.nodeByPath?.vanityUrls ?? []).find(
+                    (x: any) => x.language === 'en' && x.active && x.default,
+                )
+                expect(v, 'page-about has an active default EN vanity after authorized generation').to.exist
+            })
         })
     })
 })

@@ -64,22 +64,38 @@ describe('Scenario 7 — cross-site authorization escalation is denied (G1/S1, C
             cy.logout()
             cy.login(SITE_A_ADMIN, SITE_A_ADMIN_PW)
 
-            postGeneratePermalinksAction(actionUrl(SITE_KEY, 'en'), [uuidB], ['en'], {force: true})
-                .then((resp: Cypress.Response<any>) => {
-                    // TARGET contract (post Stage-7): the cross-site mutation is refused.
-                    expect(resp.status, 'cross-site mutation must be forbidden').to.be.oneOf([401, 403])
-                })
+            // Fire the cross-site mutation as the site-A-scoped admin, capturing the real HTTP status.
+            postGeneratePermalinksAction(actionUrl(SITE_KEY, 'en'), [uuidB], ['en'], {force: true}).then(
+                (resp: Cypress.Response<any>) => {
+                    // EVIDENCE (logged so the run artifact records the vulnerability directly): on CURRENT
+                    // code this returns 200 with a results[] body — the mutation was ACCEPTED, not denied.
+                    cy.log(`U1 EVIDENCE — cross-site POST HTTP status = ${resp.status} (secure contract: 401/403)`)
+                    cy.log(`U1 EVIDENCE — response body = ${JSON.stringify(resp.body)}`)
 
-            // And site B's manual vanity must remain active+default, NOT demoted to a redirect.
-            cy.logout()
-            cy.login()
-            getVanityUrls(PAGE_B).then((resp: any) => {
-                const v = (resp?.data?.jcr?.nodeByPath?.vanityUrls ?? [])
-                    .find((x: any) => x.language === 'en' && x.url === MANUAL_URL_B)
-                expect(v, 'site B manual vanity must still exist').to.exist
-                expect(v.active, 'site B manual vanity must stay active').to.eq(true)
-                expect(v.default, 'site B manual vanity must stay default (not demoted)').to.eq(true)
-            })
+                    // Re-check site B as root and record whether its MANUAL vanity survived untouched.
+                    cy.logout()
+                    cy.login()
+                    getVanityUrls(PAGE_B).then((vresp: any) => {
+                        const v = (vresp?.data?.jcr?.nodeByPath?.vanityUrls ?? []).find(
+                            (x: any) => x.language === 'en' && x.url === MANUAL_URL_B,
+                        )
+                        cy.log(
+                            `U1 EVIDENCE — site B manual vanity after attack: exists=${Boolean(
+                                v,
+                            )} active=${v && v.active} default=${v && v.default} (secure: active=true default=true)`,
+                        )
+
+                        // SECURE contract (turns green only after the Stage-7 per-node/per-site re-check).
+                        // These assertions are EXPECTED TO FAIL on current code: the site-B manual vanity is
+                        // demoted (default=false) and the request was not refused — that red IS the documented
+                        // live cross-site authorization-escalation vulnerability (U1/G1/S1).
+                        expect(v, 'site B manual vanity must still exist').to.exist
+                        expect(v.active, 'site B manual vanity must stay active (not demoted)').to.eq(true)
+                        expect(v.default, 'site B manual vanity must stay default (not demoted)').to.eq(true)
+                        expect(resp.status, 'cross-site mutation must be forbidden').to.be.oneOf([401, 403])
+                    })
+                },
+            )
         })
     })
 })
