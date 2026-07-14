@@ -119,6 +119,9 @@ class PermalinkGeneratorServiceTest {
         void oneParentHomepage_isSkipped() throws RepositoryException {
             JCRNodeWrapper homePage = mock(JCRNodeWrapper.class);
             when(homePage.hasProperty("j:isHomePage")).thenReturn(true);
+            JCRPropertyWrapper homeProp = mock(JCRPropertyWrapper.class);
+            when(homePage.getProperty("j:isHomePage")).thenReturn(homeProp);
+            when(homeProp.getBoolean()).thenReturn(true);
 
             String url = service.buildUrlFromParentTitlesForTest(
                     "my-page", List.of(homePage), "en", "en");

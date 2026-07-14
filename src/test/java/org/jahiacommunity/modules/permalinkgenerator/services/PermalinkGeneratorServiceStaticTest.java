@@ -351,57 +351,83 @@ class PermalinkGeneratorServiceStaticTest {
     // =========================================================================
 
     @Nested
-    @DisplayName("generateVanityForNodeIds per-node authz (U1 characterization)")
+    @DisplayName("findUnauthorizedNodeIds per-node/per-site re-check (U1 fix)")
     class PerNodeAuthzTest {
 
-        @Test
-        @DisplayName("only per-node gate is isSiteModuleEnabled; no JCRNodeWrapper.hasPermission call")
-        void noPerNodePermissionCheck() throws Exception {
-            String nodeId = "node-1";
-            JCRSessionWrapper session = mock(JCRSessionWrapper.class);
-
-            // sortNodeIdsByDepth uses the passed-in session
-            JCRNodeWrapper depthNode = mock(JCRNodeWrapper.class);
-            when(depthNode.getPath()).thenReturn("/sites/mySite/home/p");
-            when(session.getNodeByIdentifier(nodeId)).thenReturn(depthNode);
-
+        /** Wires a nodeId -> site -> siteNode chain resolved on the caller's session. */
+        private JCRSessionWrapper callerSessionFor(String nodeId, String siteKey, boolean hasSiteAdminPerm)
+                throws RepositoryException {
+            JCRSessionWrapper caller = mock(JCRSessionWrapper.class);
             JCRNodeWrapper node = mock(JCRNodeWrapper.class);
             JCRSiteNode site = mock(JCRSiteNode.class);
+            JCRNodeWrapper siteNode = mock(JCRNodeWrapper.class);
+            when(caller.getNodeByIdentifier(nodeId)).thenReturn(node);
             when(node.getResolveSite()).thenReturn(site);
-            when(site.getInstalledModules()).thenReturn(List.of("permalink-generator"));
-            // isNodeSkipped gates
-            when(node.hasProperty("j:isHomePage")).thenReturn(false);
-            when(node.isNodeType("jmix:permalinkExcluded")).thenReturn(false);
-            when(site.isNodeType("jmix:permalinkGeneratorSettings")).thenReturn(false);
-            when(node.isNodeType("jnt:file")).thenReturn(false);
-            when(node.getSession()).thenReturn(mock(JCRSessionWrapper.class));
-            when(node.getPath()).thenReturn("/sites/mySite/home/p");
-            // Null displayable name -> updateVanityForNode bails at computeVanityUrl (op null),
-            // so the node is "processed" and gated ONLY by isSiteModuleEnabled.
-            when(node.getDisplayableName()).thenReturn(null);
+            when(site.getSiteKey()).thenReturn(siteKey);
+            when(caller.getNode("/sites/" + siteKey)).thenReturn(siteNode);
+            when(siteNode.hasPermission("siteAdminPermalinkGenerator")).thenReturn(hasSiteAdminPerm);
+            return caller;
+        }
 
-            try (MockedStatic<JCRContentUtils> cu = mockStatic(JCRContentUtils.class);
-                 MockedStatic<JCRTagUtils> tags = mockStatic(JCRTagUtils.class);
-                 MockedStatic<JCRSessionFactory> f = mockStatic(JCRSessionFactory.class);
-                 MockedConstruction<RenderContext> rc = mockConstruction(RenderContext.class)) {
-                cu.when(() -> JCRContentUtils.isADisplayableNode(any(), any())).thenReturn(true);
-                tags.when(() -> JCRTagUtils.getParentsOfType(any(), anyString()))
-                        .thenReturn(Collections.emptyList());
-                JCRSessionFactory factory = mock(JCRSessionFactory.class);
-                JCRSessionWrapper langSession = mock(JCRSessionWrapper.class);
-                f.when(JCRSessionFactory::getInstance).thenReturn(factory);
-                when(factory.getCurrentSystemSession(anyString(), any(), any())).thenReturn(langSession);
-                when(langSession.getNodeByIdentifier(nodeId)).thenReturn(node);
+        @Test
+        @DisplayName("caller IS permalink-admin at the node's site -> node authorized (empty deny list)")
+        void authorizedSameSite_notDenied() throws Exception {
+            JCRSessionWrapper caller = callerSessionFor("node-a", "plgentest", true);
 
-                List<?> results = service.generateVanityForNodeIds(
-                        List.of(nodeId), List.of("en"), session, false);
+            List<String> denied = service.findUnauthorizedNodeIds(List.of("node-a"), caller);
 
-                assertThat(results).isEmpty();
-            }
+            assertThat(denied).isEmpty();
+        }
 
-            // The site-module gate is the ONLY per-node authorization; no ACL/permission re-check.
-            verify(site, atLeastOnce()).getInstalledModules();
-            verify(node, never()).hasPermission(anyString());
+        @Test
+        @DisplayName("U1 FIX: caller lacks the permission at the node's (other) site -> node DENIED")
+        void unauthorizedCrossSite_isDenied() throws Exception {
+            // Site-A admin submitting a site-B node: caller resolves site B but has NO admin permission there.
+            JCRSessionWrapper caller = callerSessionFor("node-b", "plgenxsite", false);
+
+            List<String> denied = service.findUnauthorizedNodeIds(List.of("node-b"), caller);
+
+            assertThat(denied).containsExactly("node-b");
+        }
+
+        @Test
+        @DisplayName("fail-closed: node the caller cannot even read on its own session -> DENIED")
+        void unreadableNode_failsClosed() throws Exception {
+            JCRSessionWrapper caller = mock(JCRSessionWrapper.class);
+            when(caller.getNodeByIdentifier("node-x"))
+                    .thenThrow(new javax.jcr.PathNotFoundException("not readable by caller"));
+
+            List<String> denied = service.findUnauthorizedNodeIds(List.of("node-x"), caller);
+
+            assertThat(denied).containsExactly("node-x");
+        }
+
+        @Test
+        @DisplayName("mixed batch: only the unauthorized (cross-site) node is denied")
+        void mixedBatch_deniesOnlyUnauthorized() throws Exception {
+            JCRSessionWrapper caller = mock(JCRSessionWrapper.class);
+            // node-a on the caller's own site (authorized)
+            JCRNodeWrapper nodeA = mock(JCRNodeWrapper.class);
+            JCRSiteNode siteA = mock(JCRSiteNode.class);
+            JCRNodeWrapper siteNodeA = mock(JCRNodeWrapper.class);
+            when(caller.getNodeByIdentifier("node-a")).thenReturn(nodeA);
+            when(nodeA.getResolveSite()).thenReturn(siteA);
+            when(siteA.getSiteKey()).thenReturn("plgentest");
+            when(caller.getNode("/sites/plgentest")).thenReturn(siteNodeA);
+            when(siteNodeA.hasPermission("siteAdminPermalinkGenerator")).thenReturn(true);
+            // node-b on another site (denied)
+            JCRNodeWrapper nodeB = mock(JCRNodeWrapper.class);
+            JCRSiteNode siteB = mock(JCRSiteNode.class);
+            JCRNodeWrapper siteNodeB = mock(JCRNodeWrapper.class);
+            when(caller.getNodeByIdentifier("node-b")).thenReturn(nodeB);
+            when(nodeB.getResolveSite()).thenReturn(siteB);
+            when(siteB.getSiteKey()).thenReturn("plgenxsite");
+            when(caller.getNode("/sites/plgenxsite")).thenReturn(siteNodeB);
+            when(siteNodeB.hasPermission("siteAdminPermalinkGenerator")).thenReturn(false);
+
+            List<String> denied = service.findUnauthorizedNodeIds(List.of("node-a", "node-b"), caller);
+
+            assertThat(denied).containsExactly("node-b");
         }
     }
 

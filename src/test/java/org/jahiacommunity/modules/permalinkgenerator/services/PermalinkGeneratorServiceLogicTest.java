@@ -89,19 +89,27 @@ class PermalinkGeneratorServiceLogicTest {
         }
 
         @Test
-        @DisplayName("U4 BUG: sibling '/blog-archive' is FALSE-POSITIVE excluded (startsWith over-match)")
-        void siblingArchive_overMatched_isExcludedToday() throws Exception {
+        @DisplayName("U4 FIX: sibling '/blog-archive' is NOT excluded (segment-boundary match)")
+        void siblingArchive_notOverMatched() throws Exception {
             JCRSiteNode site = siteWithExcluded("/sites/x/home/blog");
-            // Characterization of the current bug: sibling wrongly matches. After the Stage-7
-            // segment-boundary fix, flip this assertion to isFalse().
-            assertThat(isExcluded("/sites/x/home/blog-archive", site)).isTrue();
+            // After the Stage-7 segment-boundary fix, a sibling sharing a prefix is no longer over-excluded.
+            assertThat(isExcluded("/sites/x/home/blog-archive", site)).isFalse();
         }
 
         @Test
-        @DisplayName("U4 BUG: sibling '/blogging' is FALSE-POSITIVE excluded (startsWith over-match)")
-        void siblingBlogging_overMatched_isExcludedToday() throws Exception {
+        @DisplayName("U4 FIX: sibling '/blogging' is NOT excluded (segment-boundary match)")
+        void siblingBlogging_notOverMatched() throws Exception {
             JCRSiteNode site = siteWithExcluded("/sites/x/home/blog");
-            assertThat(isExcluded("/sites/x/home/blogging", site)).isTrue();
+            assertThat(isExcluded("/sites/x/home/blogging", site)).isFalse();
+        }
+
+        @Test
+        @DisplayName("U4 FIX: a configured trailing slash still matches the subtree")
+        void trailingSlashConfig_stillMatchesSubtree() throws Exception {
+            JCRSiteNode site = siteWithExcluded("/sites/x/home/blog/");
+            assertThat(isExcluded("/sites/x/home/blog", site)).isTrue();
+            assertThat(isExcluded("/sites/x/home/blog/post-1", site)).isTrue();
+            assertThat(isExcluded("/sites/x/home/blog-archive", site)).isFalse();
         }
 
         @Test
@@ -188,18 +196,35 @@ class PermalinkGeneratorServiceLogicTest {
     class AncestorPresenceTest {
 
         @Test
-        @DisplayName("U8 BUG: non-home parent with j:isHomePage PRESENT-but-false is wrongly skipped")
-        void parentWithPresentButFalseHomeFlag_isSkipped() throws Exception {
+        @DisplayName("U8 FIX: non-home parent with j:isHomePage PRESENT-but-false keeps its title segment")
+        void parentWithPresentButFalseHomeFlag_isIncluded() throws Exception {
             JCRNodeWrapper parent = mock(JCRNodeWrapper.class);
-            // Property is present (autocreated default = false) but the code only checks presence.
+            // Property is present (autocreated) but its value is false -> the parent is NOT the home page.
             when(parent.hasProperty("j:isHomePage")).thenReturn(true);
+            JCRPropertyWrapper homeProp = mock(JCRPropertyWrapper.class);
+            when(parent.getProperty("j:isHomePage")).thenReturn(homeProp);
+            when(homeProp.getBoolean()).thenReturn(false);
             when(parent.getDisplayableName()).thenReturn("Section");
 
             String url = service.buildUrlFromParentTitlesForTest(
                     "my-page", List.of(parent), "en", "en");
 
-            // Current (buggy) behavior: ancestor segment dropped -> "/my-page" with no "/section" prefix.
-            // After a value-check fix (getProperty(...).getBoolean()) this should become "/section/my-page".
+            // U8 fix reads the boolean value: a present-but-false flag is a normal page, so its segment stays.
+            assertThat(url).isEqualTo("/section/my-page");
+        }
+
+        @Test
+        @DisplayName("U8: genuine home page (j:isHomePage present AND true) is still skipped")
+        void parentThatIsActuallyHomePage_isSkipped() throws Exception {
+            JCRNodeWrapper parent = mock(JCRNodeWrapper.class);
+            when(parent.hasProperty("j:isHomePage")).thenReturn(true);
+            JCRPropertyWrapper homeProp = mock(JCRPropertyWrapper.class);
+            when(parent.getProperty("j:isHomePage")).thenReturn(homeProp);
+            when(homeProp.getBoolean()).thenReturn(true);
+
+            String url = service.buildUrlFromParentTitlesForTest(
+                    "my-page", List.of(parent), "en", "en");
+
             assertThat(url).isEqualTo("/my-page");
         }
     }

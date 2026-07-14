@@ -94,7 +94,7 @@ Replaces stale or manual vanities across the site.
    - **Missing** — no active default vanity exists.
 3. Deselect rows to keep, click **Regenerate selected**, confirm in the modal.
 
-Old vanities are always kept as redirects — no existing links 404.
+On rename, move, and regeneration the old vanities are kept as active redirects — those existing links do not 404. (Deleting a page is the exception: its vanity is deactivated and the old URL 404s, since there is no live target to redirect to — see *Vanity lifecycle* below.)
 
 **Include excluded paths** — bypasses the site's excluded-paths list for this operation.
 
@@ -190,9 +190,9 @@ tests/                                   — @jahia/cypress integration tests
 | Title change | Removed; new one created | Prefix updated, slug preserved |
 | Page move | Removed; new one created (slug preserved) | Prefix updated, slug preserved |
 | Page copy | Stripped from copy | Untouched |
-| Page delete | Deactivated (`j:active=false`) | Untouched |
+| Page delete | Deactivated (`j:active=false`, `j:default=false`) — old URL returns 404 | Untouched |
 
-Published vanities are never deleted — kept as active redirects.
+On **rename and move** the content still exists at a new path, so published auto-generated vanities are kept as active redirects (`j:active=true`) — existing links keep working. On **delete** there is no live target to redirect to, so the vanity is fully deactivated (`j:active=false` and `j:default=false`) and its old URL returns 404. This is intentional: a redirect to a removed page would be a dangling mapping.
 
 ### `GeneratePermalinksAction` — action endpoint
 
