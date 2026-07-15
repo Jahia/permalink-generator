@@ -70,6 +70,20 @@ public class GeneratePermalinksAction extends Action {
             return new ActionResult(HttpServletResponse.SC_BAD_REQUEST);
         }
 
+        // A-SEC1 / U1 fix: the dispatcher evaluates the required permission against a single
+        // URL-resolved node only, while the service mutates every submitted nodeId through an
+        // ACL-bypassing system session. Re-check, on THIS caller's session, that the caller is a
+        // permalink admin at the site of every requested node. Deny the whole request (fail-closed,
+        // no mutation) if any node is outside the caller's authority — this blocks cross-site escalation.
+        List<String> unauthorized = permalinkGeneratorService.findUnauthorizedNodeIds(nodeIds, session);
+        if (!unauthorized.isEmpty()) {
+            logger.warn("GeneratePermalinksAction: caller not authorized for {} of {} node(s) — denying (403)",
+                    unauthorized.size(), nodeIds.size());
+            JSONObject err = new JSONObject();
+            err.put("error", "You are not authorized to generate permalinks for one or more of the requested nodes.");
+            return new ActionResult(HttpServletResponse.SC_FORBIDDEN, null, err);
+        }
+
         List<String> previewParam = parameters.get("preview");
         boolean preview = previewParam != null && !previewParam.isEmpty() && "true".equals(previewParam.get(0));
 

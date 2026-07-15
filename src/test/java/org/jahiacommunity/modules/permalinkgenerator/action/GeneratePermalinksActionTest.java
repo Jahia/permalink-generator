@@ -305,6 +305,58 @@ class GeneratePermalinksActionTest {
     }
 
     // =========================================================================
+    // U1 fix — per-node/per-site authorization gate (HTTP 403)
+    // =========================================================================
+
+    @Nested
+    @DisplayName("per-node authorization gate (U1)")
+    class AuthorizationGateTest {
+
+        @Test
+        @DisplayName("caller unauthorized for a submitted node -> 403, service NEVER mutates")
+        void unauthorizedNode_returns403AndDoesNotGenerate() throws Exception {
+            when(serviceMock.findUnauthorizedNodeIds(anyList(), any()))
+                    .thenReturn(List.of("uuid-1"));
+
+            ActionResult result = execute(validParams());
+
+            assertThat(result.getResultCode()).isEqualTo(HttpServletResponse.SC_FORBIDDEN);
+            assertThat(result.getJson().toString()).contains("error");
+            verify(serviceMock, never()).generateVanityForNodeIds(anyList(), anyList(), any(), anyBoolean());
+            verify(serviceMock, never()).previewVanityForNodeIds(anyList(), anyList(), any(), anyBoolean());
+        }
+
+        @Test
+        @DisplayName("caller authorized for all nodes -> gate passes, generate proceeds (200)")
+        void authorizedNodes_proceedsToGenerate() throws Exception {
+            when(serviceMock.findUnauthorizedNodeIds(anyList(), any()))
+                    .thenReturn(Collections.emptyList());
+            when(serviceMock.generateVanityForNodeIds(anyList(), anyList(), any(), anyBoolean()))
+                    .thenReturn(Collections.emptyList());
+
+            ActionResult result = execute(validParams());
+
+            assertThat(result.getResultCode()).isEqualTo(HttpServletResponse.SC_OK);
+            verify(serviceMock).generateVanityForNodeIds(anyList(), anyList(), eq(session), anyBoolean());
+        }
+
+        @Test
+        @DisplayName("authorization gate is enforced on the preview branch too")
+        void unauthorizedNode_deniesPreview() throws Exception {
+            when(serviceMock.findUnauthorizedNodeIds(anyList(), any()))
+                    .thenReturn(List.of("uuid-1"));
+
+            Map<String, List<String>> params = validParams();
+            params.put("preview", List.of("true"));
+
+            ActionResult result = execute(params);
+
+            assertThat(result.getResultCode()).isEqualTo(HttpServletResponse.SC_FORBIDDEN);
+            verify(serviceMock, never()).previewVanityForNodeIds(anyList(), anyList(), any(), anyBoolean());
+        }
+    }
+
+    // =========================================================================
     // Helpers
     // =========================================================================
 

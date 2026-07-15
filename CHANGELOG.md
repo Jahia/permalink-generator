@@ -6,6 +6,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [2.0.2] — 2026-07-14
+
+### Security
+
+- **Cross-site authorization escalation fixed (CRITICAL)** — `GeneratePermalinksAction` now re-checks, on the caller's own session, that the caller holds the `siteAdminPermalinkGenerator` permission at the site of **every** submitted node before any mutation. Previously the permission was evaluated only against the URL-resolved node while the service mutated each node through an ACL-bypassing system session, letting a site-scoped admin overwrite/demote another site's editorial vanities (e.g. with `force=true`). The request is now denied with HTTP 403 (fail-closed) if any node is outside the caller's authority.
+
+### Fixed
+
+- **Excluded-path over-match** — excluded paths now match on a path-segment boundary instead of a raw string prefix, so configuring `/home/blog` no longer wrongly excludes siblings such as `/home/blog-archive` or `/home/blogging`.
+- **Ancestor home-page detection** — the parent-title URL fallback now reads the `j:isHomePage` boolean value instead of only testing for the property's presence, so a normal page carrying an autocreated `j:isHomePage=false` no longer loses its title segment.
+
+### Documentation
+
+- Clarified the vanity lifecycle: rename/move keep old vanities as active redirects, whereas **delete** fully deactivates the vanity (`j:active=false`, `j:default=false`) and the old URL returns 404 — a redirect to a removed page would be a dangling mapping.
+
 ## [2.0.1] — 2026-06-23
 
 ### Security
