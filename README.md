@@ -182,6 +182,7 @@ tests/                                   — @jahia/cypress integration tests
 4. Else → rebuild prefix from slugified ancestor titles.
 5. If language ≠ site default → prepend `/{lang}`.
 6. Resolve conflicts: append `-2`, `-3`, … up to 10 attempts.
+7. If all 10 attempts are exhausted, the node is skipped — no vanity is created. A WARN-level log entry (`No unique URL found for {} after {} attempts`) is written. Check server logs if pages are unexpectedly missing from audit results.
 
 ### Vanity lifecycle
 
@@ -232,6 +233,17 @@ Response (non-preview):
 }
 ```
 
+Response (`preview=true`):
+```json
+{
+  "results": [
+    { "uuid": "…", "language": "en",
+      "computedUrl": "/new-url", "currentUrl": "/old-url",
+      "willChange": true, "isManual": false }
+  ]
+}
+```
+
 ### SMART mode internals
 
 `hasManualActiveDefaultVanity(node, lang)` returns true when an active+default vanity exists with **no** `jmix:permalinkGenerated` mixin. When true and `forceRegen == false`, the node is skipped. On cascade (rename/move of parent), manual vanities on children receive a prefix-only update — the slug after the last `/` is preserved.
@@ -255,4 +267,4 @@ mvn clean install
 
 ### Tests
 
-See [tests/README.md](tests/README.md).
+See [tests/README.md](https://github.com/Jahia/permalink-generator/blob/main/tests/README.md).

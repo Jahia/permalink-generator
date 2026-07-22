@@ -23,6 +23,8 @@ describe('Setup', () => {
         createPage(`/sites/${SITE_KEY}/home`, 'page-contact',  'Contact',    'Contactez-nous')
         createPage(`/sites/${SITE_KEY}/home`, 'page-products', 'Products',   'Produits')
         createPage(`/sites/${SITE_KEY}/home/page-products`, 'page-product-one', 'Product One', 'Produit Un')
+        // Two-level nesting for scenario 3 (recursive child refresh coverage)
+        createPage(`/sites/${SITE_KEY}/home/page-products/page-product-one`, 'page-product-feature', 'Product Feature', 'Fonctionnalité Produit')
     })
 
     it('creates audit test site plgenaudit WITHOUT permalink-generator initially', () => {

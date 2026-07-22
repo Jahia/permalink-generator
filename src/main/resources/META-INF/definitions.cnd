@@ -1,8 +1,10 @@
  <jnt = 'http://www.jahia.org/jahia/nt/1.0'>
 <jmix = 'http://www.jahia.org/jahia/mix/1.0'>
 
+// Marker mixin on a vanity URL node — signals that the URL was created by this module (not by an editor).
+// Absence of this mixin = manually-set vanity. The mixin presence is the authoritative signal;
+// no property value needs to be read.
 [jmix:permalinkGenerated] mixin
- - j:permalinkGenerated (boolean) = 'true' autocreated hidden nofulltext
 
 // Site-level settings — visible in Content Editor site options
 [jmix:permalinkGeneratorSettings] mixin
@@ -17,6 +19,6 @@
  extends = jmix:navMenuItem
  itemtype = options
 
-// Content node for the site settings admin page (rendered by the Spring Web Flow)
+// Content node for the site settings admin page (rendered by permalinkGeneratorSiteSettings.jsp)
 [jnt:permalinkGeneratorSiteSettings] > jnt:content, mix:title, jmix:studioOnly, jmix:siteComponent
 

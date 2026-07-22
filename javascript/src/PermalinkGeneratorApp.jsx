@@ -21,15 +21,18 @@ const CUSTOM_CSS = `
 .pl-audit-table th { background: #f0f4f8; padding: 7px 8px; text-align: left;
                      border-bottom: 2px solid #ccd6e0; white-space: nowrap; }
 .pl-audit-table td { padding: 6px 8px; border-bottom: 1px solid #eaeaea; vertical-align: middle; }
-.pl-audit-table tr.pl-row-done td { opacity: 0.45; }
+.pl-audit-table tr.pl-row-done td { color: #595959; }
 .pl-audit-table tr:hover td { background: #f9fbfd; }
-.pl-lang-th { text-align: center !important; width: 44px; cursor: pointer; user-select: none; }
+.pl-lang-th { text-align: center !important; width: 44px; user-select: none; }
 .pl-lang-th:hover { background: #dde8f0 !important; }
+/* Screen-reader-only utility (visually hidden but announced by AT). */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+           overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 /* Pills: >=44px hit area via min sizing + padding; non-color status signal
    provided by a per-state ::before glyph AND a per-state border-style so the
    meaning never relies on color alone (WCAG SC 1.4.1). */
 .pl-pill { display: inline-flex; align-items: center; justify-content: center;
-           min-width: 44px; min-height: 24px; padding: 6px 8px; border-radius: 3px;
+           min-width: 44px; min-height: 44px; padding: 6px 8px; border-radius: 3px;
            font-size: 0.625rem; font-weight: bold; text-transform: uppercase;
            border: 2px solid transparent; box-sizing: border-box; }
 .pl-pill::before { font-size: 0.75rem; margin-right: 3px; line-height: 1; }
@@ -53,17 +56,21 @@ const CUSTOM_CSS = `
                     transition: transform 0.25s ease-out; will-change: transform; }
 @media (prefers-reduced-motion: reduce) { .pl-progress-bar { transition: none; } }
 .pl-notitle { font-style: italic; }
-.pl-audit-table tr.pl-row-ignored td { opacity: 0.45; pointer-events: none; }
+.pl-audit-table tr.pl-row-ignored td { color: #595959; pointer-events: none; }
 .pl-regen { margin-top: 32px; border-top: 2px solid #e0e0e0; padding-top: 24px; max-width: 960px; }
 .pl-regen h3 { margin-top: 0; font-size: 1.125rem; color: #4d4d4d; }
 .pl-help-btn {
     display: inline-flex; align-items: center; justify-content: center;
-    width: 20px; height: 20px; border-radius: 50%;
+    width: 44px; height: 44px; border-radius: 50%;
     border: 1px solid #767676; background: transparent;
     color: #4d4d4d; font-size: 0.75rem; font-weight: bold;
     cursor: pointer; margin-left: 8px; vertical-align: middle; line-height: 1;
     transition: background 150ms ease-out, color 150ms ease-out, border-color 150ms ease-out;
 }
+.btn:focus-visible,
+.input-xlarge:focus-visible,
+textarea:focus-visible,
+input[type='checkbox']:focus-visible { outline: 2px solid #1d5278; outline-offset: 2px; }
 .pl-help-btn:hover, .pl-help-btn[aria-expanded="true"] {
     background: #1d5278; color: #fff; border-color: #1d5278;
 }
@@ -82,6 +89,8 @@ export default function PermalinkGeneratorApp({ contextPath, sitePath, siteLangs
     return (
         <>
             <style>{CUSTOM_CSS}</style>
+            {/* role="region" sections let screen-reader users navigate by landmark.
+                A <main> is intentionally omitted here — the Jahia host page owns it. */}
             <SiteSettings
                 contextPath={contextPath}
                 sitePath={sitePath}

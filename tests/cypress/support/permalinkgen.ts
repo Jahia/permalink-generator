@@ -224,6 +224,38 @@ export const generatePermalinks = (paths: string[], langs: string[], force = fal
     })
 }
 
+/**
+ * Call the *.generatePermalinks.do HTTP action endpoint directly with preview=true.
+ * Asserts HTTP 200, validates the response shape, and yields the parsed body.
+ * Use this in tests that need to verify the preview response (willChange, computedUrl, etc.)
+ * rather than side-effecting the repository.
+ *
+ * The cy.intercept assertion ensures failures in the endpoint are surfaced immediately
+ * rather than timing-out downstream in a waitForVanityUrl call.
+ */
+export const previewPermalinks = (nodePath: string, langs: string[]): Cypress.Chainable<any> => {
+    const alias = 'previewPermalinksRequest'
+    cy.intercept('POST', '**/generatePermalinks.do').as(alias)
+
+    cy.request({
+        method: 'POST',
+        url: `${nodePath}.generatePermalinks.do`,
+        qs: {preview: 'true', languages: langs.join(',')},
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        auth: {user: 'root', pass: Cypress.env('SUPER_USER_PASSWORD') || 'root1234'},
+        failOnStatusCode: false
+    }).then((response) => {
+        // Surface HTTP-level failures immediately with a clear message
+        expect(response.status, `generatePermalinks.do must return HTTP 200 (got ${response.status})`).to.eq(200)
+    })
+
+    // Also validate via the intercepted request so response shape errors are caught early
+    return cy.wait(`@${alias}`).then((interception) => {
+        expect(interception.response?.statusCode, 'intercepted generatePermalinks.do must be HTTP 200').to.eq(200)
+        return interception.response?.body
+    })
+}
+
 // Query vanity URLs for a node
 export const getVanityUrls = (path: string): Cypress.Chainable<any> => {
     return cy.apollo({

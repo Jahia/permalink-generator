@@ -40,6 +40,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - `saveVanityWithMixin()` split into `addMixinToSavedVanity()` — single save per operation closes a create/save re-entrancy window.
 - Many magic strings extracted to named constants in `PermalinkGeneratorService`.
 
+### Dependencies
+
+- Bumped `qs` and `cypress` in `/javascript` (#4).
+- Bumped `org.assertj:assertj-core` from 3.24.2 to 3.27.7 (#7).
+
 ---
 
 ## [2.0.0] — 2026-06-18

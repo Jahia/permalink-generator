@@ -53,13 +53,15 @@ export function PillCell({ cls, lang, pillLabel, clickable, pressed, onToggle })
                 role={clickable ? 'button' : undefined}
                 tabIndex={clickable ? 0 : undefined}
                 aria-pressed={clickable ? pressed : undefined}
-                aria-label={clickable ? `${lang.toUpperCase()} — ${pillLabel}` : undefined}
+                aria-label={`${lang.toUpperCase()} — ${pillLabel}`}
                 onClick={clickable ? onToggle : undefined}
                 onKeyDown={clickable ? e => {
                     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); }
                 } : undefined}
             >
                 {lang}
+                {/* Visually hidden status text for non-interactive pills (SC 4.1.2). */}
+                {!clickable && <span className="sr-only"> — {pillLabel}</span>}
             </span>
         </td>
     );

@@ -226,21 +226,14 @@ class PermalinkGeneratorServiceTest {
         @Test
         @DisplayName("conflict on different node at first slot -> returns base-2")
         void conflictOnDifferentNode_returnsSuffixed() throws Exception {
-            VanityUrl conflicting = makeVanityUrl("/my-page", "other-uuid");
+            // VanityUrl.getIdentifier() holds the content node UUID directly.
+            // "other-content-uuid" != "node-uuid-1" -> conflict is on a different node.
+            VanityUrl conflicting = makeVanityUrl("/my-page", "other-content-uuid");
 
             when(vanityUrlManager.findExistingVanityUrls("/my-page", "siteKey", session))
                     .thenReturn(List.of(conflicting));
             when(vanityUrlManager.findExistingVanityUrls("/my-page-2", "siteKey", session))
                     .thenReturn(Collections.emptyList());
-
-            // conflictIsOnSameNode: resolve "other-uuid" -> parent -> parent -> different content node
-            JCRNodeWrapper vanityNode = mock(JCRNodeWrapper.class);
-            JCRNodeWrapper vanityParent = mock(JCRNodeWrapper.class);
-            JCRNodeWrapper contentNode = mock(JCRNodeWrapper.class);
-            when(session.getNodeByIdentifier("other-uuid")).thenReturn(vanityNode);
-            when(vanityNode.getParent()).thenReturn(vanityParent);
-            when(vanityParent.getParent()).thenReturn(contentNode);
-            when(contentNode.getIdentifier()).thenReturn("other-content-uuid");
 
             String result = invokeResolveUniqueUrl("/my-page", node, "siteKey", session);
             assertThat(result).isEqualTo("/my-page-2");
@@ -249,18 +242,11 @@ class PermalinkGeneratorServiceTest {
         @Test
         @DisplayName("conflict on SAME node (idempotent) -> returns base URL")
         void conflictOnSameNode_idempotent_returnsBaseUrl() throws Exception {
-            VanityUrl selfConflict = makeVanityUrl("/my-page", "vanity-node-uuid");
+            // VanityUrl.getIdentifier() == current node's UUID -> idempotent, URL already correct.
+            VanityUrl selfConflict = makeVanityUrl("/my-page", "node-uuid-1");
 
             when(vanityUrlManager.findExistingVanityUrls("/my-page", "siteKey", session))
                     .thenReturn(List.of(selfConflict));
-
-            JCRNodeWrapper vanityNode = mock(JCRNodeWrapper.class);
-            JCRNodeWrapper vanityParent = mock(JCRNodeWrapper.class);
-            JCRNodeWrapper contentNode = mock(JCRNodeWrapper.class);
-            when(session.getNodeByIdentifier("vanity-node-uuid")).thenReturn(vanityNode);
-            when(vanityNode.getParent()).thenReturn(vanityParent);
-            when(vanityParent.getParent()).thenReturn(contentNode);
-            when(contentNode.getIdentifier()).thenReturn("node-uuid-1"); // same node -> idempotent
 
             String result = invokeResolveUniqueUrl("/my-page", node, "siteKey", session);
             assertThat(result).isEqualTo("/my-page");
@@ -271,17 +257,10 @@ class PermalinkGeneratorServiceTest {
         void maxAttemptsExhausted_returnsNull() throws Exception {
             for (int i = 1; i <= 10; i++) {
                 String url = (i == 1) ? "/my-page" : "/my-page-" + i;
-                VanityUrl conflict = makeVanityUrl(url, "other-uuid-" + i);
+                // Each entry has a different content-node UUID, none equal to "node-uuid-1"
+                VanityUrl conflict = makeVanityUrl(url, "other-content-uuid-" + i);
                 when(vanityUrlManager.findExistingVanityUrls(url, "siteKey", session))
                         .thenReturn(List.of(conflict));
-
-                JCRNodeWrapper vn = mock(JCRNodeWrapper.class);
-                JCRNodeWrapper vp = mock(JCRNodeWrapper.class);
-                JCRNodeWrapper cn = mock(JCRNodeWrapper.class);
-                when(session.getNodeByIdentifier("other-uuid-" + i)).thenReturn(vn);
-                when(vn.getParent()).thenReturn(vp);
-                when(vp.getParent()).thenReturn(cn);
-                when(cn.getIdentifier()).thenReturn("unrelated-" + i);
             }
 
             String result = invokeResolveUniqueUrl("/my-page", node, "siteKey", session);
@@ -289,10 +268,31 @@ class PermalinkGeneratorServiceTest {
         }
 
         @Test
+        @DisplayName("conflict list with entry[0] on same node AND entry[1] on different node -> returns -2, not idempotent")
+        void conflictOnSameNodeAndDifferentNode_shouldNotBeIdempotent() throws Exception {
+            // entry[0]: identifier == current node UUID (same node)
+            VanityUrl sameNodeConflict = makeVanityUrl("/my-page", "node-uuid-1");
+            // entry[1]: identifier points to a different node
+            VanityUrl differentNodeConflict = makeVanityUrl("/my-page", "other-content-uuid");
+
+            when(vanityUrlManager.findExistingVanityUrls("/my-page", "siteKey", session))
+                    .thenReturn(List.of(sameNodeConflict, differentNodeConflict));
+            when(vanityUrlManager.findExistingVanityUrls("/my-page-2", "siteKey", session))
+                    .thenReturn(Collections.emptyList());
+
+            // conflictIsOnSameNode requires ALL entries to point to the same node.
+            // entry[1] is on a different node, so the whole conflict list is NOT same-node.
+            // The URL must be suffixed to -2.
+            String result = invokeResolveUniqueUrl("/my-page", node, "siteKey", session);
+            assertThat(result).isEqualTo("/my-page-2");
+        }
+
+        @Test
         @DisplayName("conflict entry with null identifier -> treated as not-same-node, advances to -2")
         void conflictWithNullIdentifier_advancesToSuffix() throws Exception {
+            // VanityUrl constructor leaves identifier null; conflictIsOnSameNode treats null as different node.
             VanityUrl nullIdConflict = new VanityUrl("/my-page", "siteKey", "en");
-            // identifier is null by default
+            assertThat(nullIdConflict.getIdentifier()).isNull(); // precondition
 
             when(vanityUrlManager.findExistingVanityUrls("/my-page", "siteKey", session))
                     .thenReturn(List.of(nullIdConflict));
