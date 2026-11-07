@@ -3,3 +3,5 @@ cypress/videos/
 cypress/screenshots/
 cypress/downloads/
 results/
+# Local harness env: built from .env.example plus a Jahia license -- never commit it.
+.env
