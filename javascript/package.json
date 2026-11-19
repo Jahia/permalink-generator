@@ -16,10 +16,10 @@
   },
   "devDependencies": {
     "@babel/core": "^7.23.0",
-    "@babel/preset-env": "^7.23.0",
+    "@babel/preset-env": "^7.29.14",
     "@babel/preset-react": "^7.22.0",
     "babel-loader": "^10.1.1",
-    "cypress": "^15.17.0",
+    "cypress": "^15.21.2",
     "eslint": "^8.57.0",
     "eslint-plugin-react": "^7.34.0",
     "eslint-plugin-react-hooks": "^4.6.0",
