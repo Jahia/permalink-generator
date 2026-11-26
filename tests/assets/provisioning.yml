@@ -1,7 +1,7 @@
 - karafCommand: "log:log 'START - permalink-generator provisioning'"
 
-- installBundle:
-    - 'file:///home/jahians/assets/empty-templates-1.0.0.jar'
+# By file name, uploaded with the request: Jahia 8.2.3.7+ refuses file: URLs in provisioning scripts.
+- installBundle: 'empty-templates-1.0.0.jar'
   autoStart: true
   uninstallPreviousVersion: true
 
