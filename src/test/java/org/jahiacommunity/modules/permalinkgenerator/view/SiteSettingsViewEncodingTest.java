@@ -55,6 +55,25 @@ class SiteSettingsViewEncodingTest {
     }
 
     @Test
+    @DisplayName("every expression written into the page outside a script goes through fn:escapeXml")
+    void everyOutputExpressionIsEscaped() throws IOException {
+        String jsp = Files.readString(VIEW, StandardCharsets.UTF_8);
+        assertThat(jsp).as("scriptlet output bypasses every encoder").doesNotContain("<%=");
+        // Drop the inline scripts (checked above), JSP comments and directives, and the attributes of
+        // JSTL / Jahia tags (items, test, value...), which are evaluated and never printed as is.
+        String output = INLINE_SCRIPT.matcher(jsp).replaceAll("")
+                .replaceAll("(?s)<%--.*?--%>", "")
+                .replaceAll("(?s)<%@.*?%>", "")
+                .replaceAll("(?s)</?(c|fmt|template):[^>]*>", "");
+        Matcher expr = Pattern.compile("\\$\\{").matcher(output);
+        while (expr.find()) {
+            assertThat(output.substring(expr.start()))
+                    .as("expression at offset %d is printed without fn:escapeXml", expr.start())
+                    .startsWith("${fn:escapeXml(");
+        }
+    }
+
+    @Test
     @DisplayName("j:excludedPaths values are rendered with fn:escapeXml outside any script")
     void excludedPathsRenderedInHtmlContext() throws IOException {
         String jsp = Files.readString(VIEW, StandardCharsets.UTF_8);

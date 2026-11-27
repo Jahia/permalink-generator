@@ -97,6 +97,47 @@ class ManualVanityUniquenessTest {
         verify(manualVanity, never()).setProperty(eq("j:url"), anyString());
     }
 
+    @Test
+    @DisplayName("a URL held by this page AND by another page is not free: the other page keeps it")
+    void urlHeldByThisPageAndAnotherPage_isNotFree() throws Exception {
+        VanityUrl own = new VanityUrl("/products/pricing", SITE_KEY, LANG);
+        own.setIdentifier("vanity-of-page-q");
+        JCRNodeWrapper ownVanityNode = mock(JCRNodeWrapper.class);
+        JCRNodeWrapper ownMapping = mock(JCRNodeWrapper.class);
+        when(session.getNodeByIdentifier("vanity-of-page-q")).thenReturn(ownVanityNode);
+        when(ownVanityNode.getParent()).thenReturn(ownMapping);
+        when(ownMapping.getParent()).thenReturn(movedPage);
+        VanityUrl taken = otherPageVanity("/products/pricing");
+        resolvesToOtherPage(taken);
+        when(vanityUrlManager.findExistingVanityUrls("/products/pricing", SITE_KEY, session))
+                .thenReturn(List.of(own, taken));
+        when(vanityUrlManager.findExistingVanityUrls("/products/pricing-2", SITE_KEY, session))
+                .thenReturn(Collections.emptyList());
+
+        updateManualVanityPrefix();
+
+        verify(manualVanity, never()).setProperty("j:url", "/products/pricing");
+        verify(manualVanity).setProperty("j:url", "/products/pricing-2");
+    }
+
+    @Test
+    @DisplayName("a URL held only by this page is kept as is, with no suffix")
+    void urlHeldOnlyByThisPage_isKept() throws Exception {
+        VanityUrl own = new VanityUrl("/products/pricing", SITE_KEY, LANG);
+        own.setIdentifier("vanity-of-page-q");
+        JCRNodeWrapper ownVanityNode = mock(JCRNodeWrapper.class);
+        JCRNodeWrapper ownMapping = mock(JCRNodeWrapper.class);
+        when(session.getNodeByIdentifier("vanity-of-page-q")).thenReturn(ownVanityNode);
+        when(ownVanityNode.getParent()).thenReturn(ownMapping);
+        when(ownMapping.getParent()).thenReturn(movedPage);
+        when(vanityUrlManager.findExistingVanityUrls("/products/pricing", SITE_KEY, session))
+                .thenReturn(List.of(own));
+
+        updateManualVanityPrefix();
+
+        verify(manualVanity).setProperty("j:url", "/products/pricing");
+    }
+
     // -------------------------------------------------------------------------
 
     private void updateManualVanityPrefix() throws Exception {

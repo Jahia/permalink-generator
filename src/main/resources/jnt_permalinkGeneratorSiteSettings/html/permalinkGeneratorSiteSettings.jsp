@@ -111,4 +111,4 @@ window.__PL_CONFIG__.i18n = {
 window.__PL_CONFIG__.actionUrl = window.location.pathname.replace(/\.[^/]+\.html$/, '') + '.generatePermalinks.do';
 </script>
 
-<script src="${pageContext.request.contextPath}/modules/permalink-generator/javascript/permalink-generator-admin.js"></script>
+<script src="${fn:escapeXml(pageContext.request.contextPath)}/modules/permalink-generator/javascript/permalink-generator-admin.js"></script>
