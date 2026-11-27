@@ -373,7 +373,11 @@ public class PermalinkGeneratorService {
         if (existingUrl == null) return;
         String newUrl = computeVanityUrlOnMove(node, language, site.getDefaultLanguage(), existingUrl);
         if (newUrl == null || newUrl.equals(existingUrl)) return;
-        updateManualVanityUrl(node, language, existingUrl, newUrl, session);
+        // PLG-SEC-002: the rewritten URL must not take a URL that another page of the site owns.
+        // Resolve it like the automatic branch does; when no free slot exists, keep the current URL.
+        String uniqueUrl = resolveUniqueUrl(newUrl, node, site.getSiteKey(), session);
+        if (uniqueUrl == null || uniqueUrl.equals(existingUrl)) return;
+        updateManualVanityUrl(node, language, existingUrl, uniqueUrl, session);
     }
 
     /** Locates the active+default manual vanity for the node/language and updates its j:url. */
