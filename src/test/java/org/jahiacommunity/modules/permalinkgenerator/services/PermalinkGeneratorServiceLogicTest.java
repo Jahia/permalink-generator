@@ -10,15 +10,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import javax.jcr.RepositoryException;
-import javax.jcr.Value;
 import java.lang.reflect.Method;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
@@ -88,19 +88,13 @@ class PermalinkGeneratorServiceLogicTest {
             assertThat(isExcluded("/sites/x/home/blog/post-1", site)).isTrue();
         }
 
-        @Test
-        @DisplayName("U4 FIX: sibling '/blog-archive' is NOT excluded (segment-boundary match)")
-        void siblingArchive_notOverMatched() throws Exception {
+        @ParameterizedTest(name = "{0} is NOT excluded by /sites/x/home/blog")
+        @DisplayName("U4 FIX: siblings sharing a prefix and unrelated paths are NOT excluded (segment-boundary match)")
+        @ValueSource(strings = {"/sites/x/home/blog-archive", "/sites/x/home/blogging", "/sites/x/home/news"})
+        void pathOutsideExcludedSubtree_notExcluded(String path) throws Exception {
             JCRSiteNode site = siteWithExcluded("/sites/x/home/blog");
             // After the Stage-7 segment-boundary fix, a sibling sharing a prefix is no longer over-excluded.
-            assertThat(isExcluded("/sites/x/home/blog-archive", site)).isFalse();
-        }
-
-        @Test
-        @DisplayName("U4 FIX: sibling '/blogging' is NOT excluded (segment-boundary match)")
-        void siblingBlogging_notOverMatched() throws Exception {
-            JCRSiteNode site = siteWithExcluded("/sites/x/home/blog");
-            assertThat(isExcluded("/sites/x/home/blogging", site)).isFalse();
+            assertThat(isExcluded(path, site)).isFalse();
         }
 
         @Test
@@ -110,13 +104,6 @@ class PermalinkGeneratorServiceLogicTest {
             assertThat(isExcluded("/sites/x/home/blog", site)).isTrue();
             assertThat(isExcluded("/sites/x/home/blog/post-1", site)).isTrue();
             assertThat(isExcluded("/sites/x/home/blog-archive", site)).isFalse();
-        }
-
-        @Test
-        @DisplayName("genuinely unrelated path -> not excluded")
-        void unrelatedPath_notExcluded() throws Exception {
-            JCRSiteNode site = siteWithExcluded("/sites/x/home/blog");
-            assertThat(isExcluded("/sites/x/home/news", site)).isFalse();
         }
 
         @Test
@@ -281,8 +268,8 @@ class PermalinkGeneratorServiceLogicTest {
             assertThat(readField(op, "action")).isEqualTo("promoted");
             assertThat(readField(op, "url")).isEqualTo("/my-page");
             verify(existingAuto).removeMixin("jmix:markedForDeletion");
-            verify(existingAuto).setProperty(eq("j:active"), eq(true));
-            verify(existingAuto).setProperty(eq("j:default"), eq(true));
+            verify(existingAuto).setProperty("j:active", true);
+            verify(existingAuto).setProperty("j:default", true);
             // saveVanityUrlMapping (create-fresh path) must NOT be called for a promote.
             verify(vanityUrlManager, never())
                     .saveVanityUrlMapping(any(), any(), any());
