@@ -10,13 +10,12 @@ on:
     tags-ignore:
       - '**'
 
-permissions:
-  contents: read
-
 jobs:
   build:
     name: Build module
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     container:
       image: ghcr.io/jahia/jahia-docker-mvn-cache:11-jdk-noble-mvn-loaded
       credentials:
@@ -33,6 +32,8 @@ jobs:
     name: SBOM processing
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     container:
       image: cyclonedx/cyclonedx-cli:0.24.2
     steps:
