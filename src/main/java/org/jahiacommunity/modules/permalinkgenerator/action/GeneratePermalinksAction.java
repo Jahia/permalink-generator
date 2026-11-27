@@ -43,6 +43,9 @@ public class GeneratePermalinksAction extends Action {
 
     private static final Logger logger = LoggerFactory.getLogger(GeneratePermalinksAction.class);
 
+    /** Key of the error message in the JSON body of a failed request. */
+    private static final String ERROR_KEY = "error";
+
     /** Parameter key for language codes. */
     private static final String PARAM_LANGUAGE = "language";
 
@@ -80,7 +83,7 @@ public class GeneratePermalinksAction extends Action {
             logger.warn("GeneratePermalinksAction: caller not authorized for {} of {} node(s) — denying (403)",
                     unauthorized.size(), nodeIds.size());
             JSONObject err = new JSONObject();
-            err.put("error", "You are not authorized to generate permalinks for one or more of the requested nodes.");
+            err.put(ERROR_KEY, "You are not authorized to generate permalinks for one or more of the requested nodes.");
             return new ActionResult(HttpServletResponse.SC_FORBIDDEN, null, err);
         }
 
@@ -123,7 +126,7 @@ public class GeneratePermalinksAction extends Action {
             // A-SEC3: log detail server-side; return generic message to client
             logger.error("GeneratePermalinksAction: preview failed", e);
             JSONObject err = new JSONObject();
-            err.put("error", "An internal error occurred while computing the preview.");
+            err.put(ERROR_KEY, "An internal error occurred while computing the preview.");
             return new ActionResult(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, null, err);
         }
     }
@@ -162,7 +165,7 @@ public class GeneratePermalinksAction extends Action {
             // A-SEC3: log detail server-side; return generic message to client
             logger.error("GeneratePermalinksAction: generation failed", e);
             JSONObject err = new JSONObject();
-            err.put("error", "An internal error occurred while generating permalinks.");
+            err.put(ERROR_KEY, "An internal error occurred while generating permalinks.");
             return new ActionResult(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, null, err);
         }
     }

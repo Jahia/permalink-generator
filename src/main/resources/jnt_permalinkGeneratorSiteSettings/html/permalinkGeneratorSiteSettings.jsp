@@ -10,16 +10,33 @@
 
 <c:set var="currentMode" value="${renderContext.site.hasProperty('j:permalinkGeneratorMode') ? renderContext.site.getProperty('j:permalinkGeneratorMode').string : 'SMART'}"/>
 
-<div id="permalink-generator-root"></div>
+<%-- Site data goes into HTML attributes and elements, where fn:escapeXml is the right encoder.
+     The script below reads it from the DOM and interpolates no site data (PLG-SEC-001: in a
+     JavaScript string, escapeXml leaves the backslash as is). --%>
+<div id="permalink-generator-root"
+     data-context-path="${fn:escapeXml(pageContext.request.contextPath)}"
+     data-site-path="${fn:escapeXml(renderContext.site.path)}"
+     data-current-mode="${fn:escapeXml(currentMode)}"></div>
+<ul id="permalink-generator-site-langs" hidden><c:forEach items="${renderContext.site.languages}" var="_l"><li>${fn:escapeXml(_l)}</li></c:forEach></ul>
+<ul id="permalink-generator-excluded-paths" hidden><c:if test="${renderContext.site.hasProperty('j:excludedPaths')}"><c:forEach items="${renderContext.site.getProperty('j:excludedPaths').values}" var="_ep"><li>${fn:escapeXml(_ep.string)}</li></c:forEach></c:if></ul>
 
 <script>
-window.__PL_CONFIG__ = {
-    contextPath: '${pageContext.request.contextPath}',
-    sitePath: '${fn:escapeXml(renderContext.site.path)}',
-    currentMode: '${fn:escapeXml(currentMode)}',
-    siteLangs: [<c:forEach items="${renderContext.site.languages}" var="_l" varStatus="_ls"><c:if test="${!_ls.first}">,</c:if>'${fn:escapeXml(_l)}'</c:forEach>],
-    excludedPaths: [<c:if test="${renderContext.site.hasProperty('j:excludedPaths')}"><c:forEach items="${renderContext.site.getProperty('j:excludedPaths').values}" var="_ep" varStatus="_eps"><c:if test="${!_eps.first}">,</c:if>'${fn:escapeXml(_ep.string)}'</c:forEach></c:if>],
-    i18n: {
+(function () {
+    var root = document.getElementById('permalink-generator-root');
+    var textsOf = function (listId) {
+        return Array.prototype.map.call(document.querySelectorAll('#' + listId + ' > li'), function (li) {
+            return li.textContent;
+        });
+    };
+    window.__PL_CONFIG__ = {
+        contextPath: root.getAttribute('data-context-path'),
+        sitePath: root.getAttribute('data-site-path'),
+        currentMode: root.getAttribute('data-current-mode'),
+        siteLangs: textsOf('permalink-generator-site-langs'),
+        excludedPaths: textsOf('permalink-generator-excluded-paths')
+    };
+}());
+window.__PL_CONFIG__.i18n = {
         title:           '<fmt:message key="permalinkgenerator.siteSettings.title"/>',
         desc:            '<fmt:message key="permalinkgenerator.siteSettings.description"/>',
         modeLabel:       '<fmt:message key="permalinkgenerator.mode.label"/>',
@@ -90,9 +107,8 @@ window.__PL_CONFIG__ = {
         saveSuccess:     '<fmt:message key="permalinkgenerator.saveSuccess"/>',
         genPartial:      '<fmt:message key="permalinkgenerator.audit.generate.partial"/>',
         regenPartial:    '<fmt:message key="permalinkgenerator.regen.generate.partial"/>'
-    }
 };
 window.__PL_CONFIG__.actionUrl = window.location.pathname.replace(/\.[^/]+\.html$/, '') + '.generatePermalinks.do';
 </script>
 
-<script src="${pageContext.request.contextPath}/modules/permalink-generator/javascript/permalink-generator-admin.js"></script>
+<script src="${fn:escapeXml(pageContext.request.contextPath)}/modules/permalink-generator/javascript/permalink-generator-admin.js"></script>

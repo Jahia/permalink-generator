@@ -8,6 +8,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Security
+
+- **Stored XSS in the Site Settings panel fixed** — the panel page wrote each excluded path into a JavaScript string encoded for HTML only, so a value ending with a backslash broke out of the string. A site administrator could store two excluded paths that ran script in the session of any administrator who opened Site Settings → Permalink Generator, including a server administrator. The page now writes the site data into HTML attributes and elements, and its script reads them from the page. No site data is written inside the script any more.
+- **A moved page can no longer take another page's vanity URL** — in SMART mode, when a page with a manual vanity URL moved (or an ancestor's title changed), the module rewrote the URL under the new parent without checking that it was free. An editor could give a page the URL of another page of the same site. The rewritten URL now goes through the same uniqueness check as generated URLs (`/products/pricing` becomes `/products/pricing-2` when taken). When no free URL exists, the manual URL is left unchanged.
+
 ### Fixed
 
 - **"Depends on: default" warning in Module management** — the module no longer declares a dependency on the legacy `default` module (bundle header `Jahia-Depends` and `j:dependencies` in `repository.xml`). It uses no node type, view or resource from `default`, and Jahia instances that do not ship `default` showed the module with an unresolved dependency. The module now depends only on `seo`.

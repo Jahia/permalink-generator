@@ -373,7 +373,11 @@ public class PermalinkGeneratorService {
         if (existingUrl == null) return;
         String newUrl = computeVanityUrlOnMove(node, language, site.getDefaultLanguage(), existingUrl);
         if (newUrl == null || newUrl.equals(existingUrl)) return;
-        updateManualVanityUrl(node, language, existingUrl, newUrl, session);
+        // PLG-SEC-002: the rewritten URL must not take a URL that another page of the site owns.
+        // Resolve it like the automatic branch does; when no free slot exists, keep the current URL.
+        String uniqueUrl = resolveUniqueUrl(newUrl, node, site.getSiteKey(), session);
+        if (uniqueUrl == null || uniqueUrl.equals(existingUrl)) return;
+        updateManualVanityUrl(node, language, existingUrl, uniqueUrl, session);
     }
 
     /** Locates the active+default manual vanity for the node/language and updates its j:url. */
@@ -638,19 +642,27 @@ public class PermalinkGeneratorService {
         return null;
     }
 
-    /** Returns true if all conflicting vanity entries point back to the given node. */
+    /**
+     * Returns true if ALL conflicting vanity entries point back to the given node. One entry owned by
+     * another node, or one that cannot be resolved, makes the URL foreign (PLG-SEC-002: a page that
+     * already holds a URL as a redirect must not take it from the page that owns it).
+     */
     private boolean conflictIsOnSameNode(List<VanityUrl> conflict, JCRNodeWrapper node, JCRSessionWrapper session) {
         for (VanityUrl v : conflict) {
-            if (v.getIdentifier() == null) continue;
-            try {
-                if (node.getIdentifier().equals(session.getNodeByIdentifier(v.getIdentifier()).getParent().getParent().getIdentifier())) {
-                    return true;
-                }
-            } catch (Exception ignored) {
-                // Cannot resolve — not same node
-            }
+            if (v.getIdentifier() == null || !isOwnedBy(v, node, session)) return false;
         }
-        return false;
+        return true;
+    }
+
+    /** True when the vanity mapping {@code v} sits under {@code node}'s vanityUrlMapping. */
+    private boolean isOwnedBy(VanityUrl v, JCRNodeWrapper node, JCRSessionWrapper session) {
+        try {
+            return node.getIdentifier().equals(
+                    session.getNodeByIdentifier(v.getIdentifier()).getParent().getParent().getIdentifier());
+        } catch (RepositoryException | RuntimeException e) {
+            logger.debug("Cannot resolve vanity {} — treating it as owned by another node: {}", v.getIdentifier(), e.getMessage());
+            return false;
+        }
     }
 
     // -------------------------------------------------------------------------
