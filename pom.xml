@@ -18,6 +18,12 @@
         <url>https://github.com/Jahia/permalink-generator.git</url>
       <tag>HEAD</tag>
   </scm>
+
+    <properties>
+        <jahia-depends>seo</jahia-depends>
+    </properties>
+
+
     <licenses>
         <license>
             <name>MIT License</name>
@@ -139,7 +145,6 @@
                 <extensions>true</extensions>
                 <configuration>
                     <instructions>
-                        <Jahia-Depends>default,seo</Jahia-Depends>
                         <_dsannotations>*</_dsannotations>
                     </instructions>
                 </configuration>

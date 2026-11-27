@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **"Depends on: default" warning in Module management** — the module no longer declares a dependency on the legacy `default` module (bundle header `Jahia-Depends` and `j:dependencies` in `repository.xml`). It uses no node type, view or resource from `default`, and Jahia instances that do not ship `default` showed the module with an unresolved dependency. The module now depends only on `seo`.
+
+---
+
 ## [2.0.2] — 2026-07-14
 
 ### Security
